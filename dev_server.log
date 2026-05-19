@@ -8,3 +8,4 @@
   ➜  Local:   http://localhost:5173/
   ➜  Network: use --host to expose
 10:01:07 PM [vite] hmr update /src/Auth.jsx
+11:16:25 PM [vite] hmr update /src/App.jsx, /src/Auth.jsx

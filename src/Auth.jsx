@@ -112,13 +112,24 @@ export default function Auth({ onAuthSuccess }) {
           </div>
         )}
 
-        <div style={{ textAlign: 'center' }}>
+        <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 10 }}>
           <button onClick={() => { setIsLogin(!isLogin); setMessage('') }}
             style={{
               background: 'none', border: 'none', color: '#7CA8E8',
               cursor: 'pointer', fontSize: 12, fontFamily: "'DM Sans',sans-serif"
             }}>
             {isLogin ? 'Нет аккаунта? Зарегистрироваться' : 'Уже есть аккаунт? Войти'}
+          </button>
+
+          <div style={{ height: '1px', background: '#222', margin: '8px 0' }} />
+
+          <button onClick={() => onAuthSuccess({ id: 'guest', email: 'guest@example.com' })}
+            style={{
+              background: 'rgba(232,168,124,0.1)', border: '1px solid rgba(232,168,124,0.2)',
+              borderRadius: 10, padding: '8px', color: '#E8A87C',
+              cursor: 'pointer', fontSize: 12, fontFamily: "'DM Sans',sans-serif"
+            }}>
+            Продолжить как гость (без синхронизации)
           </button>
         </div>
       </div>

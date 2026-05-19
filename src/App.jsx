@@ -31,34 +31,26 @@ function relLabel(s) {
 
 const EMPTY_FORM = { title:"", note:"", time:"", priority:"medium" };
 const PO = {deadline:0,high:1,medium:2,low:3};
-const [user, setUser] = useState(null)
-const [authLoading, setAuthLoading] = useState(true)
 
-// ── AI Suggest ────────────────────────────────────────────────────────────────
+// ── AI Suggest (Mock) ─────────────────────────────────────────────────────────
 async function fetchAISuggestions(dateStr, existingTasks) {
-  const d = strToDate(dateStr);
-  const dayName = DAYS_FULL[d.getDay()];
-  const dateLabel = `${d.getDate()} ${MONTHS_GEN[d.getMonth()]} ${d.getFullYear()}`;
-  const existing = existingTasks.map(t=>t.title).join(", ") || "пусто";
+  // Симуляция "размышлений" ИИ
+  await new Promise(r => setTimeout(r, 1500));
 
-  const prompt = `Ты умный планировщик задач. Предложи 4 конкретные задачи на ${dateLabel} (${dayName}).
-Уже есть задачи: ${existing}.
-Верни ТОЛЬКО JSON массив из 4 объектов: [{"title":"...","priority":"medium|high|low|deadline","note":"..."}]
-Задачи должны быть практичными, разнообразными (работа, здоровье, быт, саморазвитие). Не повторяй существующие. Без markdown, без пояснений.`;
+  const suggestions = [
+    { title: "Прогулка на свежем воздухе 🌿", priority: "medium", note: "Минимум 30 минут для ясности ума." },
+    { title: "Заняться самообразованием 📚", priority: "high", note: "Прочитать главу книги или посмотреть урок." },
+    { title: "Планирование следующей недели 🗓️", priority: "medium", note: "Записать ключевые цели и встречи." },
+    { title: "Вечерний детокс 📵", priority: "low", note: "Без гаджетов за час до сна." },
+    { title: "Сделать зарядку 🤸", priority: "high", note: "Разминка на 10-15 минут." },
+    { title: "Уборка рабочего места ✨", priority: "medium", note: "Чистота вокруг — чистота в мыслях." }
+  ];
 
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 1000,
-      messages: [{ role: "user", content: prompt }],
-    }),
-  });
-  const data = await response.json();
-  const text = data.content?.map(i=>i.text||"").join("") || "[]";
-  const clean = text.replace(/```json|```/g,"").trim();
-  return JSON.parse(clean);
+  const existingTitles = new Set(existingTasks.map(t => t.title));
+  return suggestions
+    .filter(s => !existingTitles.has(s.title))
+    .sort(() => 0.5 - Math.random())
+    .slice(0, 4);
 }
 
 // ── TaskCard ──────────────────────────────────────────────────────────────────
@@ -348,6 +340,8 @@ function Modal({ editing, form, setForm, onSubmit, onClose, selectedDate }) {
 
 // ── Main App ──────────────────────────────────────────────────────────────────
 export default function App() {
+  const [user, setUser] = useState(null)
+  const [authLoading, setAuthLoading] = useState(true)
   const [tasks,    setTasks]    = useState({});
   const [selected, setSelected] = useState(todayStr());
   const [calMonth, setCalMonth] = useState(()=>{ const n=new Date(); return{y:n.getFullYear(),m:n.getMonth()}; });
@@ -365,7 +359,10 @@ export default function App() {
   // Load
   useEffect(()=>{
     (async()=>{
-      try{ const r=await window.storage.get("planner_v2"); if(r) setTasks(JSON.parse(r.value)); }catch{}
+      try {
+        const saved = localStorage.getItem("planner_v2");
+        if (saved) setTasks(JSON.parse(saved));
+      } catch {}
       setLoaded(true);
     })();
   },[]);
@@ -426,8 +423,8 @@ useEffect(() => {
 
 const save = useCallback(async (newTasks) => {
   setTasks(newTasks)
-  // Save to localStorage as fallback
-  try { await window.storage.set("planner_v2", JSON.stringify(newTasks)) } catch {}
+  // Save to localStorage
+  try { localStorage.setItem("planner_v2", JSON.stringify(newTasks)) } catch {}
   // Save to Supabase if logged in
   if (!user) return
   try {
@@ -509,7 +506,7 @@ const save = useCallback(async (newTasks) => {
 
   const weekDays = Array.from({length:7},(_,i)=>addDays(today,-3+i));
 
-  if(!loaded) return (
+  if(!loaded || authLoading) return (
     <div style={{background:"#0C0C0C",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}>
       <div style={{textAlign:"center"}}>
         <div style={{fontSize:28,marginBottom:12,opacity:0.6}}>✦</div>
@@ -517,6 +514,8 @@ const save = useCallback(async (newTasks) => {
       </div>
     </div>
   );
+
+  if(!user) return <Auth onAuthSuccess={(u)=>setUser(u)} />;
 
   return (
     <>

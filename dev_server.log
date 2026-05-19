@@ -1,0 +1,10 @@
+
+> planner-v2@0.0.0 dev
+> vite
+
+
+  VITE v5.4.21  ready in 280 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+10:01:07 PM [vite] hmr update /src/Auth.jsx

@@ -27,7 +27,7 @@ export default function Auth({ onAuthSuccess }) {
           email, password
         })
         if (error) throw error
-        setMessage('Регистрация успешна! Проверьте почту или войдите.')
+        setMessage('Регистрация успешна! Загляните на почту для подтверждения аккаунта, затем войдите.')
         setIsLogin(true)
       }
     } catch (error) {

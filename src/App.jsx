@@ -15,6 +15,13 @@ function dateToStr(d) { return d.toISOString().split("T")[0]; }
 function strToDate(s) { const [y,m,d]=s.split("-").map(Number); return new Date(y,m-1,d); }
 function uid() { return Math.random().toString(36).slice(2)+Date.now().toString(36); }
 function addDays(s,n) { const d=strToDate(s); d.setDate(d.getDate()+n); return dateToStr(d); }
+function pluralize(n, one, two, many) {
+  let x = Math.abs(n) % 100, y = x % 10;
+  if (x > 10 && x < 20) return many;
+  if (y > 1 && y < 5) return two;
+  if (y === 1) return one;
+  return many;
+}
 function relLabel(s) {
   const t=todayStr();
   if(s===t) return "Сегодня";
@@ -282,7 +289,9 @@ export default function App() {
           </div>
 
           <div className="toolbar">
-             <div className="stats">{dayTasks.length} задач · {dayTasks.filter(t=>t.completed).length} готово</div>
+             <div className="stats">
+               {dayTasks.length} {pluralize(dayTasks.length, 'задача', 'задачи', 'задач')} · {dayTasks.filter(t=>t.completed).length} готово
+             </div>
              <div className="actions">
                 <button onClick={() => setShowAI(true)} className="ai-btn"><Sparkles size={16} /> ✨ AI</button>
                 <button onClick={() => { setForm(EMPTY_FORM); setEditing(null); setModal(true); }} className="add-btn"><Plus size={18} /> Задача</button>

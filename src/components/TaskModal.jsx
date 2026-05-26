@@ -72,21 +72,22 @@ export default function TaskModal({ editing, form, setForm, onSubmit, onClose, s
           value={form.note} onChange={e=>setForm({...form,note:e.target.value})}
           rows={3} style={{...inputSt,resize:"none",minHeight:90}}/>
 
-        <div style={{display:"flex",gap:20,marginBottom:14}}>
-           <div style={{flex:1}}>
+        <div style={{display:"grid", gridTemplateColumns:"1fr 2fr", gap:20, marginBottom:20, alignItems: "end"}}>
+           <div>
               <div style={labelSt}>Время</div>
               <input type="time" value={form.time} onChange={e=>setForm({...form,time:e.target.value})} style={{...inputSt,marginBottom:0}}/>
            </div>
-           <div style={{flex:2}}>
+           <div>
               <div style={labelSt}>Приоритет</div>
-              <div style={{display:"flex",gap:6}}>
+              <div style={{display:"flex", gap:8, justifyContent: "space-between"}}>
                 {Object.entries(PRIORITY).map(([key,p])=>(
                   <button key={key} onClick={()=>setForm({...form,priority:key})} style={{
-                    width:38, height:38, borderRadius:12, cursor:"pointer",
+                    width:44, height:44, borderRadius:12, cursor:"pointer",
                     display:"flex", alignItems:"center", justifyContent:"center",
-                    transition:"all 0.2s ease", fontSize:18,
+                    transition:"all 0.2s ease", fontSize:20,
                     border:`1px solid ${form.priority===key?p.color:"#222"}`,
                     background:form.priority===key?p.bg:"#0e0e0e",
+                    flexShrink: 0
                   }} title={p.label}>{p.icon}</button>
                 ))}
               </div>
@@ -116,11 +117,11 @@ export default function TaskModal({ editing, form, setForm, onSubmit, onClose, s
             border:"1px solid #252525",color:"#666",cursor:"pointer",
             fontFamily:"'DM Sans',sans-serif",fontSize:14,fontWeight:600
           }}>Отмена</button>
-          <button onClick={onSubmit} disabled={!form.title.trim()} style={{
+          <button onClick={onSubmit} disabled={!form.title || !form.title.trim()} style={{
             flex:2,padding:"14px",borderRadius:14,
-            background:form.title.trim()?"#E8A87C":"#1a1a1a",
-            color:form.title.trim()?"#000":"#444",
-            border:"none",cursor:form.title.trim()?"pointer":"default",
+            background: (form.title && form.title.trim()) ? "#E8A87C" : "#1a1a1a",
+            color: (form.title && form.title.trim()) ? "#000" : "#444",
+            border: "none", cursor: (form.title && form.title.trim()) ? "pointer" : "default",
             fontWeight:700,fontFamily:"'DM Sans',sans-serif",fontSize:14,transition:"all 0.2s",
           }}>{editing?"Сохранить изменения":"Создать задачу"}</button>
         </div>

@@ -34,7 +34,8 @@ export default function TaskCard({ task, onToggle, onEdit, onDelete, isNew }) {
         borderRadius: 16,
         padding: "14px 14px 14px 16px",
         display: "flex",
-        alignItems: "flex-start",
+        alignItems: "center", /* Fix for Bug 3 */
+        justifyContent: "space-between",
         gap: 12,
         opacity: task.completed ? 0.4 : 1,
         transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
@@ -70,7 +71,7 @@ export default function TaskCard({ task, onToggle, onEdit, onDelete, isNew }) {
             }}>{p.icon} {p.label}</span>
             <span style={{
               fontSize: 10, padding: "2px 8px", borderRadius: 99, fontWeight: 700,
-              background: "rgba(255,255,255,0.03)", color: "#666", whiteSpace: "nowrap", border: "1px solid #1a1a1a"
+              background: "rgba(255,255,255,0.03)", color: cat.color, whiteSpace: "nowrap", border: `1px solid ${cat.color}33`
             }}>{cat.icon} {cat.label}</span>
           </div>
 
@@ -83,9 +84,9 @@ export default function TaskCard({ task, onToggle, onEdit, onDelete, isNew }) {
         {task.note && <div style={{ fontSize: 13, color: "#666", lineHeight: 1.5, wordBreak: "break-word" }}>{task.note}</div>}
       </div>
 
-      <div style={{ display: "flex", gap: 0, flexShrink: 0 }}>
-        <button onClick={onEdit} className="act-btn" title="Редактировать"><Edit3 size={16} /></button>
-        <button onClick={onDelete} className="act-btn" title="Удалить"><Trash2 size={16} /></button>
+      <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+        <button onClick={onEdit} className="act-btn" title="Редактировать" style={{ width: 36, height: 36, minWidth: 36, flexShrink: 0 }}><Edit3 size={16} /></button>
+        <button onClick={onDelete} className="act-btn" title="Удалить" style={{ width: 36, height: 36, minWidth: 36, flexShrink: 0 }}><Trash2 size={16} /></button>
       </div>
     </motion.div>
   );

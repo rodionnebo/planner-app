@@ -25,10 +25,15 @@ body {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 .main-header {
-  height: 64px;
+  height: auto;
+  min-height: 64px;
+  padding-top: 10px;
+  padding-bottom: 10px;
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
@@ -83,6 +88,7 @@ body {
   margin-bottom: 40px;
   overflow-x: auto;
   padding-bottom: 4px;
+  padding-right: 24px; /* Fix for Bug 1 */
 }
 
 .week-day {

@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { supabase } from './supabaseClient'
+import { useState, useEffect } from 'react'
+import { supabase, isSupabaseConfigured } from './supabaseClient'
 
 export default function Auth({ onAuthSuccess }) {
   const [email, setEmail] = useState('')
@@ -7,11 +7,30 @@ export default function Auth({ onAuthSuccess }) {
   const [isLogin, setIsLogin] = useState(true)
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
+  const [cooldown, setCooldown] = useState(0)
+
+  useEffect(() => {
+    if (cooldown > 0) {
+      const timer = setTimeout(() => setCooldown(cooldown - 1), 1000)
+      return () => clearTimeout(timer)
+    }
+  }, [cooldown])
+
+  const validateEmail = (email) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+  }
 
   async function handleSubmit(e) {
     e.preventDefault()
+
+    if (!validateEmail(email)) {
+      setMessage('Пожалуйста, введите корректный email')
+      return
+    }
+
     setLoading(true)
     setMessage('')
+    setCooldown(2) // 2 seconds cooldown
 
     try {
       if (isLogin) {
@@ -27,7 +46,7 @@ export default function Auth({ onAuthSuccess }) {
           password,
         })
         if (error) throw error
-        setMessage('Регистрация успешна! Теперь войди.')
+        setMessage('Регистрация успешна! Проверь почту для подтверждения, затем войди.')
         setIsLogin(true)
       }
     } catch (error) {
@@ -65,6 +84,22 @@ export default function Auth({ onAuthSuccess }) {
           boxShadow: '0 28px 80px rgba(0,0,0,0.65)',
         }}
       >
+        {!isSupabaseConfigured && (
+          <div style={{
+            background: 'rgba(232,168,124,0.1)',
+            border: '1px solid var(--accent)',
+            borderRadius: 12,
+            padding: '12px',
+            marginBottom: 20,
+            fontSize: 12,
+            color: 'var(--accent)',
+            textAlign: 'center'
+          }}>
+            ⚠️ Supabase не настроен. Облачная синхронизация недоступна.
+            Используйте гостевой режим.
+          </div>
+        )}
+
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <span style={{ fontSize: 24 }}>✦</span>
           <h2
@@ -128,23 +163,23 @@ export default function Auth({ onAuthSuccess }) {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || cooldown > 0 || !isSupabaseConfigured}
             style={{
               width: '100%',
               padding: '12px',
               borderRadius: 11,
-              background: loading ? '#1e1e1e' : '#E8A87C',
-              color: loading ? '#444' : '#0C0C0C',
+              background: (loading || cooldown > 0 || !isSupabaseConfigured) ? '#1e1e1e' : '#E8A87C',
+              color: (loading || cooldown > 0 || !isSupabaseConfigured) ? '#444' : '#0C0C0C',
               border: 'none',
               fontWeight: 600,
               fontSize: 13.5,
-              cursor: loading ? 'default' : 'pointer',
+              cursor: (loading || cooldown > 0 || !isSupabaseConfigured) ? 'default' : 'pointer',
               fontFamily: "'DM Sans',sans-serif",
               transition: 'all 0.2s',
               marginBottom: 12,
             }}
           >
-            {loading ? 'Загрузка...' : isLogin ? 'Войти' : 'Зарегистрироваться'}
+            {loading ? 'Загрузка...' : cooldown > 0 ? `Подождите ${cooldown}с` : isLogin ? 'Войти' : 'Зарегистрироваться'}
           </button>
         </form>
 
@@ -153,10 +188,10 @@ export default function Auth({ onAuthSuccess }) {
             style={{
               padding: '10px 12px',
               borderRadius: 8,
-              background: message.includes('успешна')
+              background: message.includes('успешна') || message.includes('Проверь')
                 ? 'rgba(109,191,126,0.1)'
                 : 'rgba(255,112,112,0.1)',
-              color: message.includes('успешна') ? '#6DBF7E' : '#FF7070',
+              color: message.includes('успешна') || message.includes('Проверь') ? '#6DBF7E' : '#FF7070',
               fontSize: 12,
               marginBottom: 12,
               textAlign: 'center',

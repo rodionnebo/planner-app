@@ -3,19 +3,36 @@ import { supabase } from '../supabaseClient'
 import { generateId, strToDate } from '../utils/date'
 import toast from 'react-hot-toast'
 
+const STORAGE_KEY = 'planner_v2'
+
 export function useTasks(user) {
   const [tasks, setTasks] = useState(() => {
     try {
-      const saved = localStorage.getItem('planner_v2')
-      return saved ? JSON.parse(saved) : {}
-    } catch (e) {
-      console.error('Failed to load tasks from localStorage', e)
+      const saved = localStorage.getItem(STORAGE_KEY)
+      if (!saved) return {}
+      const parsed = JSON.parse(saved)
+      if (typeof parsed !== 'object' || parsed === null) throw new Error('Invalid format')
+      return parsed
+    } catch (err) {
+      console.error('Failed to load tasks from localStorage', err)
       return {}
     }
   })
+
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
+  const [syncQueue, setSyncQueue] = useState([])
   const undoTimeoutRef = useRef(null)
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY)
+      if (saved) JSON.parse(saved)
+    } catch {
+      localStorage.removeItem(STORAGE_KEY)
+      toast.error('Локальные данные были повреждены и сброшены')
+    }
+  }, [])
 
   const syncRows = useCallback(
     async (rows) => {
@@ -37,9 +54,19 @@ export function useTasks(user) {
 
         const { error } = await supabase.from('tasks').upsert(allRows, { onConflict: 'task_id' })
         if (error) throw error
-      } catch (e) {
-        console.error('Sync failed', e)
-        toast.error('Ошибка синхронизации с облаком')
+
+        const syncedIds = new Set(rows.map(r => r.id))
+        setSyncQueue(prev => prev.filter(r => !syncedIds.has(r.id)))
+      } catch (err) {
+        console.error('Sync failed', err)
+        setSyncQueue(prev => {
+          const newQueue = [...prev]
+          rows.forEach(row => {
+            if (!newQueue.find(q => q.id === row.id)) newQueue.push(row)
+          })
+          return newQueue
+        })
+        toast.error('Ошибка синхронизации. Попробуем позже.')
       } finally {
         setSyncing(false)
       }
@@ -54,9 +81,9 @@ export function useTasks(user) {
       try {
         const { error } = await supabase.from('tasks').delete().in('task_id', ids)
         if (error) throw error
-      } catch (e) {
-        console.error('Delete failed', e)
-        toast.error('Ошибка удаления из облака')
+      } catch (err) {
+        console.error('Delete failed', err)
+        toast.error('Не удалось удалить из облака')
       } finally {
         setSyncing(false)
       }
@@ -68,9 +95,12 @@ export function useTasks(user) {
     (newTasks, rowsToSync = [], idsToDelete = []) => {
       setTasks(newTasks)
       try {
-        localStorage.setItem('planner_v2', JSON.stringify(newTasks))
-      } catch (e) {
-        console.error('Failed to save to localStorage', e)
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(newTasks))
+      } catch (err) {
+        console.error('Failed to save to localStorage', err)
+        if (err.name === 'QuotaExceededError') {
+          toast.error('Память переполнена. Не удалось сохранить локально.')
+        }
       }
 
       if (rowsToSync.length > 0) syncRows(rowsToSync)
@@ -79,7 +109,17 @@ export function useTasks(user) {
     [syncRows, removeFromSupabase]
   )
 
-  // Sync with Supabase on load
+  useEffect(() => {
+    const handleOnline = () => {
+      if (syncQueue.length > 0) {
+        toast.success('Соединение восстановлено. Синхронизирую...')
+        syncRows(syncQueue)
+      }
+    }
+    window.addEventListener('online', handleOnline)
+    return () => window.removeEventListener('online', handleOnline)
+  }, [syncQueue, syncRows])
+
   useEffect(() => {
     let isMounted = true
 
@@ -90,70 +130,64 @@ export function useTasks(user) {
       }
 
       setLoading(true)
-      const { data, error } = await supabase.from('tasks').select('*').eq('user_id', user.id)
+      try {
+        const { data, error } = await supabase.from('tasks').select('*').eq('user_id', user.id)
 
-      if (!isMounted) return
+        if (!isMounted) return
 
-      if (error) {
-        toast.error('Ошибка загрузки задач')
-        setLoading(false)
-        return
-      }
+        if (error) throw error
 
-      if (data.length === 0) {
-        const localData = localStorage.getItem('planner_v2')
-        if (localData) {
-          const parsed = JSON.parse(localData)
-          const localTaskCount = Object.values(parsed).flat().length
-          if (localTaskCount > 0) {
-            const recover = window.confirm(
-              `В облаке нет данных, но найдено ${localTaskCount} задач локально. Восстановить их в облако?`
-            )
-            if (recover) {
-              setTasks(parsed)
-              syncRows(Object.entries(parsed).flatMap(([date, list]) =>
-                list.map(t => ({ ...t, date_str: date }))
-              ))
-              setLoading(false)
-              return
+        if (data.length === 0) {
+          const localData = localStorage.getItem(STORAGE_KEY)
+          if (localData) {
+            const parsed = JSON.parse(localData)
+            const localTaskCount = Object.values(parsed).flat().length
+            if (localTaskCount > 0) {
+              const recover = window.confirm(
+                `В облаке нет данных, но найдено ${localTaskCount} задач локально. Восстановить их в облако?`
+              )
+              if (recover) {
+                setTasks(parsed)
+                syncRows(Object.entries(parsed).flatMap(([date, list]) =>
+                  list.map(t => ({ ...t, date_str: date }))
+                ))
+                setLoading(false)
+                return
+              }
             }
           }
         }
-      }
 
-      const grouped = {}
-      data.forEach((row) => {
-        if (!grouped[row.date_str]) grouped[row.date_str] = []
-        grouped[row.date_str].push({
-          id: row.task_id,
-          title: row.title,
-          note: row.note,
-          time: row.time,
-          priority: row.priority,
-          completed: row.completed,
-          createdAt: row.created_at,
-          repeat: row.repeat || 'none',
+        const grouped = {}
+        data.forEach((row) => {
+          if (!row.task_id || !row.title || !row.date_str) return
+          if (!grouped[row.date_str]) grouped[row.date_str] = []
+          grouped[row.date_str].push({
+            id: row.task_id,
+            title: row.title,
+            note: row.note,
+            time: row.time,
+            priority: row.priority,
+            completed: row.completed,
+            createdAt: row.created_at,
+            repeat: row.repeat || 'none',
+          })
         })
-      })
 
-      try {
-        localStorage.setItem(
-          'planner_backup',
-          JSON.stringify({ tasks: grouped, timestamp: new Date().toISOString() })
-        )
-      } catch (e) {
-        console.error('Backup failed', e)
+        localStorage.setItem('planner_backup', JSON.stringify({ tasks: grouped, ts: Date.now() }))
+        setTasks(grouped)
+      } catch (err) {
+        console.error('Cloud load failed', err)
+        toast('Работаем в офлайне (облако недоступно)', { icon: '📴' })
+      } finally {
+        if (isMounted) setLoading(false)
       }
-
-      setTasks(grouped)
-      setLoading(false)
     }
 
     loadTasks()
     return () => { isMounted = false }
   }, [user, syncRows])
 
-  // Recurring tasks generator
   const getTasksForDate = useCallback(
     (dateStr) => {
       const dayTasks = tasks[dateStr] || []

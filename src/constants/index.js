@@ -72,4 +72,13 @@ export const REPEAT_OPTIONS = [
   { value: 'weekly', label: 'Каждую неделю' },
 ]
 
-export const EMPTY_FORM = { title: '', note: '', time: '', priority: 'medium', repeat: 'none' }
+export const TASK_EMOJIS = ['📌', '✨', '🍎', '💻', '📚', '🏃', '💊', '🏠', '🧹', '🎨', '🛠️', '🛒']
+
+export const EMPTY_FORM = {
+  title: '',
+  note: '',
+  time: '',
+  priority: 'medium',
+  repeat: 'none',
+  emoji: '📌',
+}

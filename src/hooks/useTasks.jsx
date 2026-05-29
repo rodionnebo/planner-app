@@ -320,6 +320,7 @@ export function useTasks(user) {
   )
 
   return {
+    setTasks,
     tasks,
     loading,
     addTask,

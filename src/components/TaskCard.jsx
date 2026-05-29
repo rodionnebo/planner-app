@@ -1,26 +1,53 @@
-import React, { useState } from 'react'
+import React from 'react'
+import { useSortable } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { PRIORITY } from '../constants'
 
 export const TaskCard = React.memo(({ task, onToggle, onEdit, onDelete, onMove, isNew }) => {
-  const [showMove, setShowMove] = useState(false)
+  const [showMove, setShowMove] = React.useState(false)
   const p = PRIORITY[task.priority]
 
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: task.id,
+  })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    background: task.completed ? 'rgba(255,255,255,0.015)' : 'var(--bg-card)',
+    border: `1px solid ${task.completed ? '#1e1e1e' : 'var(--border-light)'}`,
+    borderLeft: `3px solid ${task.completed ? '#252525' : p.color}`,
+    borderRadius: 14,
+    padding: '13px 13px 13px 15px',
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: 11,
+    opacity: isDragging ? 0.4 : task.completed ? 0.5 : 1,
+    zIndex: isDragging ? 100 : 1,
+    position: 'relative',
+  }
+
   return (
-    <div
-      className={`task-card${isNew ? ' task-new' : ''}`}
-      style={{
-        background: task.completed ? 'rgba(255,255,255,0.015)' : 'var(--bg-card)',
-        border: `1px solid ${task.completed ? '#1e1e1e' : 'var(--border-light)'}`,
-        borderLeft: `3px solid ${task.completed ? '#252525' : p.color}`,
-        borderRadius: 14,
-        padding: '13px 13px 13px 15px',
-        display: 'flex',
-        alignItems: 'flex-start',
-        gap: 11,
-        opacity: task.completed ? 0.5 : 1,
-        transition: 'opacity 0.25s, border-color 0.25s, background 0.25s, transform 0.2s',
-      }}
-    >
+    <div ref={setNodeRef} style={style} className={`task-card${isNew ? ' task-new' : ''}`}>
+      <div
+        {...attributes}
+        {...listeners}
+        style={{
+          cursor: 'grab',
+          padding: '4px 2px',
+          marginRight: -4,
+          opacity: 0.2,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 2,
+        }}
+        title="Перетащить"
+      >
+        <div style={{ width: 3, height: 3, borderRadius: '50%', background: 'currentColor' }} />
+        <div style={{ width: 3, height: 3, borderRadius: '50%', background: 'currentColor' }} />
+        <div style={{ width: 3, height: 3, borderRadius: '50%', background: 'currentColor' }} />
+      </div>
+
       <button
         onClick={onToggle}
         className="check-btn"
@@ -64,6 +91,7 @@ export const TaskCard = React.memo(({ task, onToggle, onEdit, onDelete, onMove, 
             marginBottom: task.note ? 4 : 0,
           }}
         >
+          <span style={{ fontSize: 16 }}>{task.emoji || '📌'}</span>
           <span
             style={{
               fontSize: 14.5,
@@ -120,17 +148,23 @@ export const TaskCard = React.memo(({ task, onToggle, onEdit, onDelete, onMove, 
                 }
               }}
               style={{
-                background: '#0c0c0c',
+                background: 'var(--bg-input)',
                 border: '1px solid #222',
                 borderRadius: 6,
-                color: '#fff',
+                color: 'var(--text-highlight)',
                 fontSize: 11,
                 padding: '4px 6px',
               }}
             />
             <button
               onClick={() => setShowMove(false)}
-              style={{ background: 'transparent', border: 'none', color: '#555', fontSize: 11, cursor: 'pointer' }}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-dim)',
+                fontSize: 11,
+                cursor: 'pointer',
+              }}
             >
               Отмена
             </button>

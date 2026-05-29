@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react'
 import { strToDate } from '../utils/date'
-import { MONTHS_GEN, PRIORITY, REPEAT_OPTIONS } from '../constants'
+import { MONTHS_GEN, PRIORITY, REPEAT_OPTIONS, TASK_EMOJIS } from '../constants'
 
 export const Modal = ({ editing, form, setForm, onSubmit, onClose, selectedDate }) => {
   const d = strToDate(selectedDate)
@@ -14,10 +14,19 @@ export const Modal = ({ editing, form, setForm, onSubmit, onClose, selectedDate 
     return () => clearTimeout(timer)
   }, [])
 
+  const timeOptions = []
+  for (let h = 0; i < 24; h++) {
+    for (let m = 0; m < 60; m += 30) {
+      const hh = String(h).padStart(2, '0')
+      const mm = String(m).padStart(2, '0')
+      timeOptions.push(`${hh}:${mm}`)
+    }
+  }
+
   const inputSt = {
     width: '100%',
     background: 'var(--bg-input)',
-    border: '1px solid #222',
+    border: '1px solid var(--border-light)',
     borderRadius: 10,
     padding: '11px 13px',
     color: 'var(--text-highlight)',
@@ -100,18 +109,39 @@ export const Modal = ({ editing, form, setForm, onSubmit, onClose, selectedDate 
           </button>
         </div>
 
-        <input
-          ref={inputRef}
-          placeholder="Название задачи *"
-          value={form.title}
-          onChange={(e) => setForm({ ...form, title: e.target.value })}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) onSubmit()
-            if (e.key === 'Escape') onClose()
-          }}
-          style={inputSt}
-          required
-        />
+        <div style={{ display: 'flex', gap: 10, marginBottom: 11 }}>
+          <select
+            value={form.emoji}
+            onChange={(e) => setForm({ ...form, emoji: e.target.value })}
+            style={{
+              width: 50,
+              background: 'var(--bg-input)',
+              border: '1px solid var(--border-light)',
+              borderRadius: 10,
+              fontSize: 20,
+              textAlign: 'center',
+              cursor: 'pointer',
+            }}
+          >
+            {TASK_EMOJIS.map((e) => (
+              <option key={e} value={e}>
+                {e}
+              </option>
+            ))}
+          </select>
+          <input
+            ref={inputRef}
+            placeholder="Название задачи *"
+            value={form.title}
+            onChange={(e) => setForm({ ...form, title: e.target.value })}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) onSubmit()
+              if (e.key === 'Escape') onClose()
+            }}
+            style={{ ...inputSt, marginBottom: 0 }}
+            required
+          />
+        </div>
 
         <textarea
           placeholder="Заметка (необязательно)..."
@@ -124,12 +154,23 @@ export const Modal = ({ editing, form, setForm, onSubmit, onClose, selectedDate 
         <div style={{ display: 'flex', gap: 15, marginBottom: 14 }}>
           <div style={{ flex: 1 }}>
             <div style={labelSt}>Время</div>
-            <input
-              type="time"
+            <select
               value={form.time}
               onChange={(e) => setForm({ ...form, time: e.target.value })}
-              style={{ ...inputSt, marginBottom: 0 }}
-            />
+              style={{ ...inputSt, marginBottom: 0, height: 42 }}
+            >
+              <option value="">Без времени</option>
+              {Array.from({ length: 24 }).map((_, h) =>
+                ['00', '30'].map((m) => {
+                  const val = `${String(h).padStart(2, '0')}:${m}`
+                  return (
+                    <option key={val} value={val}>
+                      {val}
+                    </option>
+                  )
+                })
+              )}
+            </select>
           </div>
           <div style={{ flex: 1 }}>
             <div style={labelSt}>Повтор</div>
@@ -153,6 +194,7 @@ export const Modal = ({ editing, form, setForm, onSubmit, onClose, selectedDate 
             {Object.entries(PRIORITY).map(([key, p]) => (
               <button
                 key={key}
+                type="button"
                 onClick={() => setForm({ ...form, priority: key })}
                 style={{
                   padding: '5px 13px',
@@ -175,6 +217,7 @@ export const Modal = ({ editing, form, setForm, onSubmit, onClose, selectedDate 
         <div style={{ display: 'flex', gap: 9 }}>
           <button
             onClick={onClose}
+            type="button"
             style={{
               flex: 1,
               padding: '11px',
@@ -192,6 +235,7 @@ export const Modal = ({ editing, form, setForm, onSubmit, onClose, selectedDate 
           <button
             onClick={onSubmit}
             disabled={!form.title.trim()}
+            type="button"
             style={{
               flex: 2,
               padding: '11px',

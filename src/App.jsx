@@ -1,5 +1,20 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Toaster } from 'react-hot-toast'
+import confetti from 'canvas-confetti'
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
 import { supabase } from './supabaseClient'
 import Auth from './Auth'
 import { useTasks } from './hooks/useTasks.jsx'
@@ -9,6 +24,7 @@ import { SidebarContent } from './components/SidebarContent'
 import { Modal } from './components/Modal'
 import { AISuggestPanel } from './components/AISuggestPanel'
 import { Statistics } from './components/Statistics'
+import { ConfirmModal } from './components/ConfirmModal'
 import { EMPTY_FORM, DAYS_FULL, MONTHS_GEN, DAYS_SHORT, PRIORITY_ORDER } from './constants'
 import { todayStr, addDays, strToDate, relLabel, parseQuickAdd } from './utils/date'
 
@@ -18,12 +34,31 @@ export default function App() {
   const [showCal, setShowCal] = useState(false)
   const [showAI, setShowAI] = useState(false)
   const [showStats, setShowStats] = useState(false)
+  const [theme, setTheme] = useState(() => localStorage.getItem('planner_theme') || 'dark')
   const [modal, setModal] = useState(false)
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(EMPTY_FORM)
   const [searchQuery, setSearchQuery] = useState('')
   const [newTaskId, setNewTaskId] = useState(null)
   const [today, setToday] = useState(todayStr())
+  const [confirmDelete, setConfirmDelete] = useState(null)
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  )
+
+  // Theme effect
+  useEffect(() => {
+    if (theme === 'light') {
+      document.documentElement.classList.add('light-theme')
+    } else {
+      document.documentElement.classList.remove('light-theme')
+    }
+    localStorage.setItem('planner_theme', theme)
+  }, [theme])
 
   // Dynamic today update
   useEffect(() => {
@@ -46,10 +81,11 @@ export default function App() {
       setUser(session?.user ?? null)
     })
     return () => subscription.unsubscribe()
-  }, [modal, showAI, setSelectedDate, handleCloseModal])
+  }, [])
 
   const {
     tasks,
+    setTasks,
     loading,
     addTask,
     editTask,
@@ -60,12 +96,40 @@ export default function App() {
     getTasksForDate,
   } = useTasks(user)
 
+  const { selectedDate, setSelectedDate, calMonth, setCalMonth, navigateMonth } = useCalendar()
+
+  const handleCloseModal = useCallback(() => {
+    setModal(false)
+    setEditing(null)
+    setForm(EMPTY_FORM)
+  }, [])
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    function onKey(e) {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
+      if ((e.key === 'n' || e.key === 'N') && !modal && !showAI) {
+        setForm(EMPTY_FORM)
+        setEditing(null)
+        setModal(true)
+      }
+      if (e.key === 'ArrowLeft') setSelectedDate((s) => addDays(s, -1))
+      if (e.key === 'ArrowRight') setSelectedDate((s) => addDays(s, 1))
+      if (e.key === 'Escape') {
+        handleCloseModal()
+        setShowAI(false)
+        setShowCal(false)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [modal, showAI, setSelectedDate, handleCloseModal])
+
   const dayTasks = useMemo(() => getTasksForDate(selectedDate), [getTasksForDate, selectedDate])
 
   const filteredTasks = useMemo(() => {
     if (!searchQuery.trim()) return dayTasks
 
-    // If searching, we look through ALL tasks
     const results = []
     const query = searchQuery.toLowerCase()
 
@@ -84,11 +148,15 @@ export default function App() {
   }, [dayTasks, searchQuery, tasks])
 
   const sortedTasks = useMemo(() => {
-    return [...filteredTasks].sort((a, b) => {
-      if (a.completed !== b.completed) return a.completed ? 1 : -1
-      return PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority]
-    })
-  }, [filteredTasks])
+    if (searchQuery.trim()) {
+      return [...filteredTasks].sort((a, b) => {
+        if (a.completed !== b.completed) return a.completed ? 1 : -1
+        return PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority]
+      })
+    }
+    // If not searching, we use the order from the tasks array (DND order)
+    return filteredTasks
+  }, [filteredTasks, searchQuery])
 
   const total = dayTasks.length
   const done = dayTasks.filter((t) => t.completed).length
@@ -96,8 +164,19 @@ export default function App() {
   const rel = relLabel(selectedDate)
   const d = strToDate(selectedDate)
 
+  // Confetti effect
+  useEffect(() => {
+    if (total > 0 && done === total) {
+      confetti({
+        particleCount: 100,
+        spread: 70,
+        origin: { y: 0.6 },
+        colors: ['#E8A87C', '#6DBF7E', '#7CA8E8'],
+      })
+    }
+  }, [done, total])
+
   const overdueCount = useMemo(() => {
-    // Correct count: total number of overdue tasks, not days
     return Object.entries(tasks).reduce((acc, [date, list]) => {
       if (date < today) {
         return acc + list.filter((t) => !t.completed).length
@@ -113,7 +192,6 @@ export default function App() {
   const handleSubmit = useCallback(() => {
     if (!form.title.trim()) return
 
-    // Quick parse if it's a new task
     const finalForm = editing ? form : { ...form, ...parseQuickAdd(form.title) }
 
     if (editing) {
@@ -126,14 +204,19 @@ export default function App() {
     handleCloseModal()
   }, [form, editing, selectedDate, editTask, addTask, handleCloseModal])
 
-  const handleDelete = useCallback(
-    (id) => {
-      if (window.confirm('Вы уверены, что хотите удалить эту задачу?')) {
-        deleteTask(selectedDate, id)
-      }
-    },
-    [deleteTask, selectedDate]
-  )
+  const handleDragEnd = (event) => {
+    const { active, over } = event
+    if (active.id !== over.id) {
+      const oldIndex = sortedTasks.findIndex((t) => t.id === active.id)
+      const newIndex = sortedTasks.findIndex((t) => t.id === over.id)
+      const newList = arrayMove(sortedTasks, oldIndex, newIndex)
+
+      const newTasks = { ...tasks }
+      newTasks[selectedDate] = newList
+      setTasks(newTasks)
+      // Save order to Supabase could be implemented here as well
+    }
+  }
 
   if (authLoading || loading) {
     return (
@@ -198,6 +281,19 @@ export default function App() {
             >
               Планер
             </span>
+            <button
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                fontSize: 18,
+                cursor: 'pointer',
+                marginLeft: 5,
+              }}
+              title="Переключить тему"
+            >
+              {theme === 'dark' ? '🌙' : '☀️'}
+            </button>
             {overdueCount > 0 && (
               <span
                 style={{
@@ -285,6 +381,7 @@ export default function App() {
               )}
             </div>
             <div
+              className="keyboard-hints"
               style={{
                 fontSize: 11,
                 color: 'var(--text-dark)',
@@ -325,26 +422,25 @@ export default function App() {
             />
           </div>
 
-          {/* ── Sidebar Mobile (dropdown) ── */}
+          {/* ── Sidebar Mobile Bottom Sheet ── */}
+          <div className={`bottom-sheet${showCal ? ' open' : ''}`}>
+            <div className="sheet-handle" onClick={() => setShowCal(false)} />
+            <SidebarContent
+              calMonth={calMonth}
+              setCalMonth={setCalMonth}
+              selected={selectedDate}
+              setSelected={setSelectedDate}
+              tasks={tasks}
+              today={today}
+              onNavigateMonth={navigateMonth}
+              onClose={() => setShowCal(false)}
+            />
+          </div>
           {showCal && (
             <div
-              className="sidebar-mobile"
-              style={{
-                borderBottom: '1px solid var(--border)',
-                background: 'var(--bg-surface)',
-              }}
-            >
-              <SidebarContent
-                calMonth={calMonth}
-                setCalMonth={setCalMonth}
-                selected={selectedDate}
-                setSelected={setSelectedDate}
-                tasks={tasks}
-                today={today}
-                onNavigateMonth={navigateMonth}
-                onClose={() => setShowCal(false)}
-              />
-            </div>
+              style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 90 }}
+              onClick={() => setShowCal(false)}
+            />
           )}
 
           {/* ── Main ── */}
@@ -355,7 +451,13 @@ export default function App() {
             {/* Date header */}
             <div style={{ marginBottom: 20 }}>
               <div
-                style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap', marginBottom: 3 }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'baseline',
+                  gap: 10,
+                  flexWrap: 'wrap',
+                  marginBottom: 3,
+                }}
               >
                 <h1
                   style={{
@@ -563,7 +665,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* Task list */}
+            {/* Task list with DND */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 7, paddingBottom: 90 }}>
               {sortedTasks.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '56px 20px', opacity: 0.25 }}>
@@ -572,30 +674,42 @@ export default function App() {
                     {isPast ? 'День прошёл чисто' : 'Задач нет'}
                   </div>
                   <div style={{ fontSize: 12.5 }}>
-                    {isPast ? 'Нечего переносить — отличная работа' : 'Нажми + или N чтобы добавить задачу'}
+                    {isPast
+                      ? 'Нечего переносить — отличная работа'
+                      : 'Нажми + или N чтобы добавить задачу'}
                   </div>
                 </div>
               ) : (
-                sortedTasks.map((task) => (
-                  <TaskCard
-                    key={task.id}
-                    task={task}
-                    isNew={task.id === newTaskId}
-                    onToggle={() => toggleTask(selectedDate, task.id)}
-                    onMove={(newDate) => moveTask(selectedDate, newDate, task.id)}
-                    onEdit={() => {
-                      setForm({
-                        title: task.title,
-                        note: task.note || '',
-                        time: task.time || '',
-                        priority: task.priority,
-                      })
-                      setEditing({ ...task, date: selectedDate })
-                      setModal(true)
-                    }}
-                    onDelete={() => handleDelete(task.id)}
-                  />
-                ))
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext items={sortedTasks} strategy={verticalListSortingStrategy}>
+                    {sortedTasks.map((task) => (
+                      <TaskCard
+                        key={task.id}
+                        task={task}
+                        isNew={task.id === newTaskId}
+                        onToggle={() => toggleTask(selectedDate, task.id)}
+                        onMove={(newDate) => moveTask(selectedDate, newDate, task.id)}
+                        onEdit={() => {
+                          setForm({
+                            title: task.title,
+                            note: task.note || '',
+                            time: task.time || '',
+                            priority: task.priority,
+                            repeat: task.repeat || 'none',
+                            emoji: task.emoji || '📌',
+                          })
+                          setEditing({ ...task, date: selectedDate })
+                          setModal(true)
+                        }}
+                        onDelete={() => setConfirmDelete(task.id)}
+                      />
+                    ))}
+                  </SortableContext>
+                </DndContext>
               )}
             </div>
 
@@ -627,6 +741,7 @@ export default function App() {
                 transition: 'transform 0.15s, box-shadow 0.15s',
                 fontWeight: 300,
                 lineHeight: 1,
+                zIndex: 80,
               }}
             >
               +
@@ -653,6 +768,17 @@ export default function App() {
           />
         )}
         {showStats && <Statistics tasks={tasks} onClose={() => setShowStats(false)} />}
+        {confirmDelete && (
+          <ConfirmModal
+            title="Удалить задачу?"
+            message="Это действие нельзя будет отменить."
+            onConfirm={() => {
+              deleteTask(selectedDate, confirmDelete)
+              setConfirmDelete(null)
+            }}
+            onCancel={() => setConfirmDelete(null)}
+          />
+        )}
       </div>
     </>
   )

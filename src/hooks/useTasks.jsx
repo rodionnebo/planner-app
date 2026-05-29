@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { supabase } from '../supabaseClient'
-import { generateId, strToDate } from '../utils/date'
+import { generateId, strToDate, todayStr, addDays } from '../utils/date'
 import toast from 'react-hot-toast'
 
 const STORAGE_KEY = 'planner_v2'
@@ -23,6 +23,30 @@ export function useTasks(user) {
   const [syncing, setSyncing] = useState(false)
   const [syncQueue, setSyncQueue] = useState([])
   const undoTimeoutRef = useRef(null)
+
+  // Streaks calculation
+  const streak = useMemo(() => {
+    let count = 0
+    let current = todayStr()
+
+    // Simple logic: check past days starting from yesterday/today
+    // If all tasks are done on that day, increment streak.
+    // For simplicity, we only count days that have at least 1 task.
+    while (true) {
+      const dayTasks = tasks[current] || []
+      if (dayTasks.length > 0 && dayTasks.every(t => t.completed)) {
+        count++
+        current = addDays(current, -1)
+      } else if (current === todayStr() && dayTasks.length === 0) {
+          // Skip today if no tasks yet
+          current = addDays(current, -1)
+      } else {
+        break
+      }
+      if (count > 365) break // Safety break
+    }
+    return count
+  }, [tasks])
 
   useEffect(() => {
     try {
@@ -50,6 +74,7 @@ export function useTasks(user) {
           completed: t.completed,
           created_at: t.createdAt || new Date().toISOString(),
           repeat: t.repeat || 'none',
+          tags: t.tags || []
         }))
 
         const { error } = await supabase.from('tasks').upsert(allRows, { onConflict: 'task_id' })
@@ -66,7 +91,6 @@ export function useTasks(user) {
           })
           return newQueue
         })
-        toast.error('Ошибка синхронизации. Попробуем позже.')
       } finally {
         setSyncing(false)
       }
@@ -83,7 +107,6 @@ export function useTasks(user) {
         if (error) throw error
       } catch (err) {
         console.error('Delete failed', err)
-        toast.error('Не удалось удалить из облака')
       } finally {
         setSyncing(false)
       }
@@ -97,9 +120,8 @@ export function useTasks(user) {
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(newTasks))
       } catch (err) {
-        console.error('Failed to save to localStorage', err)
         if (err.name === 'QuotaExceededError') {
-          toast.error('Память переполнена. Не удалось сохранить локально.')
+          toast.error('Память переполнена')
         }
       }
 
@@ -112,7 +134,6 @@ export function useTasks(user) {
   useEffect(() => {
     const handleOnline = () => {
       if (syncQueue.length > 0) {
-        toast.success('Соединение восстановлено. Синхронизирую...')
         syncRows(syncQueue)
       }
     }
@@ -132,25 +153,24 @@ export function useTasks(user) {
       setLoading(true)
       try {
         const { data, error } = await supabase.from('tasks').select('*').eq('user_id', user.id)
-
         if (!isMounted) return
-
         if (error) throw error
 
         if (data.length === 0) {
+          // Cloud is empty. Check if we have local data to migrate.
           const localData = localStorage.getItem(STORAGE_KEY)
           if (localData) {
             const parsed = JSON.parse(localData)
-            const localTaskCount = Object.values(parsed).flat().length
-            if (localTaskCount > 0) {
-              const recover = window.confirm(
-                `В облаке нет данных, но найдено ${localTaskCount} задач локально. Восстановить их в облако?`
+            if (Object.keys(parsed).length > 0) {
+              const confirmMigrate = window.confirm(
+                'У вас есть локальные задачи. Хотите перенести их в облако?'
               )
-              if (recover) {
-                setTasks(parsed)
-                syncRows(Object.entries(parsed).flatMap(([date, list]) =>
-                  list.map(t => ({ ...t, date_str: date }))
-                ))
+              if (confirmMigrate) {
+                const rowsToSync = []
+                Object.entries(parsed).forEach(([date_str, list]) => {
+                  list.forEach(t => rowsToSync.push({ ...t, date_str }))
+                })
+                syncRows(rowsToSync)
                 setLoading(false)
                 return
               }
@@ -171,14 +191,13 @@ export function useTasks(user) {
             completed: row.completed,
             createdAt: row.created_at,
             repeat: row.repeat || 'none',
+            tags: row.tags || []
           })
         })
 
-        localStorage.setItem('planner_backup', JSON.stringify({ tasks: grouped, ts: Date.now() }))
         setTasks(grouped)
       } catch (err) {
         console.error('Cloud load failed', err)
-        toast('Работаем в офлайне (облако недоступно)', { icon: '📴' })
       } finally {
         if (isMounted) setLoading(false)
       }
@@ -347,6 +366,10 @@ export function useTasks(user) {
 
   const moveTask = useCallback(
     (oldDate, newDate, id) => {
+      if (!id && typeof newDate === 'object') {
+        // Special case for duplication
+        return addTask(oldDate, newDate);
+      }
       setTasks(prev => {
         const idStr = id.toString()
         const next = { ...prev }
@@ -387,46 +410,18 @@ export function useTasks(user) {
         if (next[date]) {
           const completedTasks = next[date].filter((t) => t.completed)
           const idsToDelete = completedTasks.map((t) => t.id)
-
           if (idsToDelete.length === 0) return prev
-
           next[date] = next[date].filter((t) => !t.completed)
-
           const handleUndo = () => {
             if (undoTimeoutRef.current) {
               clearTimeout(undoTimeoutRef.current)
               undoTimeoutRef.current = null
             }
             setTasks(prev)
-            toast.success('Удаление отменено')
           }
-
-          toast(
-            (t) => (
-              <span>
-                Удалено задач: {idsToDelete.length}{' '}
-                <button
-                  onClick={() => {
-                    handleUndo()
-                    toast.dismiss(t.id)
-                  }}
-                  style={{
-                    background: 'var(--accent-muted)',
-                    color: 'var(--accent)',
-                    border: 'none',
-                    borderRadius: 4,
-                    padding: '2px 8px',
-                    marginLeft: 10,
-                    cursor: 'pointer',
-                  }}
-                >
-                  Отменить
-                </button>
-              </span>
-            ),
-            { duration: 5000 }
-          )
-
+          toast(t => (
+            <span>Удалено: {idsToDelete.length} <button onClick={() => { handleUndo(); toast.dismiss(t.id) }}>Отмена</button></span>
+          ))
           undoTimeoutRef.current = setTimeout(() => {
             updateLocalAndCloud(next, [], idsToDelete)
             undoTimeoutRef.current = null
@@ -443,6 +438,7 @@ export function useTasks(user) {
     tasks,
     loading,
     syncing,
+    streak,
     addTask,
     editTask,
     deleteTask,

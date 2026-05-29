@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react'
+import { useState, useEffect, useMemo, useCallback, lazy, Suspense, useRef } from 'react'
 import { Toaster } from 'react-hot-toast'
 import confetti from 'canvas-confetti'
 import {
@@ -28,7 +28,6 @@ import { EMPTY_FORM, PRIORITY_ORDER } from './constants'
 import { todayStr, addDays, parseQuickAdd } from './utils/date'
 import { requestNotificationPermission, scheduleTaskNotifications } from './utils/notifications'
 
-// Lazy components
 const Modal = lazy(() => import('./components/Modal').then(m => ({ default: m.Modal })))
 const AISuggestPanel = lazy(() => import('./components/AISuggestPanel').then(m => ({ default: m.AISuggestPanel })))
 const Statistics = lazy(() => import('./components/Statistics').then(m => ({ default: m.Statistics })))
@@ -40,6 +39,7 @@ export default function App() {
   const [showCal, setShowCal] = useState(false)
   const [showAI, setShowAI] = useState(false)
   const [showStats, setShowStats] = useState(false)
+  const [isFocusMode, setIsFocusMode] = useState(false)
   const [theme, setTheme] = useState(() => localStorage.getItem('planner_theme') || 'dark')
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(
     () => localStorage.getItem('planner_sidebar_collapsed') === 'true'
@@ -52,6 +52,8 @@ export default function App() {
   const [today, setToday] = useState(todayStr())
   const [confirmDelete, setConfirmDelete] = useState(null)
 
+  const touchStartRef = useRef(null)
+
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -59,7 +61,6 @@ export default function App() {
     })
   )
 
-  // Theme effect
   useEffect(() => {
     if (theme === 'light') {
       document.documentElement.classList.add('light-theme')
@@ -73,12 +74,10 @@ export default function App() {
     localStorage.setItem('planner_sidebar_collapsed', isSidebarCollapsed)
   }, [isSidebarCollapsed])
 
-  // Notification permission
   useEffect(() => {
     requestNotificationPermission()
   }, [])
 
-  // Dynamic today update
   useEffect(() => {
     const timer = setInterval(() => {
       const now = todayStr()
@@ -87,7 +86,6 @@ export default function App() {
     return () => clearInterval(timer)
   }, [today])
 
-  // Auth check
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
@@ -106,6 +104,7 @@ export default function App() {
     setTasks,
     loading,
     syncing,
+    streak,
     addTask,
     editTask,
     deleteTask,
@@ -115,7 +114,6 @@ export default function App() {
     getTasksForDate,
   } = useTasks(user)
 
-  // Notification scheduling
   useEffect(() => {
     scheduleTaskNotifications(tasks)
   }, [tasks])
@@ -135,7 +133,6 @@ export default function App() {
     }
   }
 
-  // Keyboard shortcuts
   useEffect(() => {
     function onKey(e) {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
@@ -146,6 +143,7 @@ export default function App() {
       }
       if (e.key === 'ArrowLeft') setSelectedDate((s) => addDays(s, -1))
       if (e.key === 'ArrowRight') setSelectedDate((s) => addDays(s, 1))
+      if (e.key === 'f' || e.key === 'F') setIsFocusMode(v => !v)
       if (e.key === 'Escape') {
         handleCloseModal()
         setShowAI(false)
@@ -155,6 +153,24 @@ export default function App() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [modal, showAI, setSelectedDate, handleCloseModal])
+
+  const handleTouchStart = (e) => {
+    touchStartRef.current = e.touches[0].clientX
+  }
+
+  const handleTouchEnd = (e) => {
+    if (!touchStartRef.current) return
+    const touchEnd = e.changedTouches[0].clientX
+    const diff = touchStartRef.current - touchEnd
+
+    // Swipe threshold 100px
+    if (diff > 100) {
+      setSelectedDate(s => addDays(s, 1))
+    } else if (diff < -100) {
+      setSelectedDate(s => addDays(s, -1))
+    }
+    touchStartRef.current = null
+  }
 
   const dayTasks = useMemo(() => getTasksForDate(selectedDate), [getTasksForDate, selectedDate])
 
@@ -191,7 +207,6 @@ export default function App() {
   const total = dayTasks.length
   const done = dayTasks.filter((t) => t.completed).length
 
-  // Confetti effect
   useEffect(() => {
     const lastDone = localStorage.getItem(`done_confetti_${selectedDate}`)
     if (total > 0 && done === total && lastDone !== 'true') {
@@ -214,7 +229,6 @@ export default function App() {
     }, 0)
   }, [tasks, today])
 
-  // Reset scroll on date change
   useEffect(() => {
     const mainArea = document.querySelector('.main-area')
     if (mainArea) mainArea.scrollTop = 0
@@ -256,15 +270,7 @@ export default function App() {
 
   if (authLoading || loading) {
     return (
-      <div
-        style={{
-          background: 'var(--bg-main)',
-          minHeight: '100vh',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
+      <div style={{ background: 'var(--bg-main)', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: 28, marginBottom: 12, opacity: 0.6 }}>✦</div>
           <div style={{ color: 'var(--text-dim)', fontSize: 13 }}>Загрузка...</div>
@@ -282,6 +288,7 @@ export default function App() {
         toastOptions={{ style: { background: '#111', color: '#fff', border: '1px solid #222' } }}
       />
       <div
+        className={isFocusMode ? 'focus-mode' : ''}
         style={{
           background: 'var(--bg-main)',
           minHeight: '100vh',
@@ -289,8 +296,9 @@ export default function App() {
           display: 'flex',
           flexDirection: 'column',
         }}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
       >
-        {/* ── Header ── */}
         <header
           style={{
             borderBottom: '1px solid var(--border)',
@@ -307,379 +315,86 @@ export default function App() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
             <button
               onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                fontSize: 18,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'var(--accent)',
-              }}
+              style={{ background: 'transparent', border: 'none', fontSize: 18, cursor: 'pointer', color: 'var(--accent)' }}
               title={isSidebarCollapsed ? 'Развернуть сайдбар' : 'Свернуть сайдбар'}
             >
               {isSidebarCollapsed ? '»' : '«'}
             </button>
             <span style={{ fontSize: 18 }}>✦</span>
-            <span
-              style={{
-                fontFamily: 'var(--font-serif)',
-                fontSize: 21,
-                fontWeight: 700,
-                color: 'var(--accent)',
-                letterSpacing: 0.3,
-              }}
-            >
-              Планер
-            </span>
-            {syncing && (
-               <span
-                 style={{ fontSize: 12, marginLeft: 8, opacity: 0.5, animation: 'spin 2s linear infinite' }}
-                 title="Синхронизация..."
-               >
-                 ☁️
-               </span>
-            )}
-            <button
-              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                fontSize: 18,
-                cursor: 'pointer',
-                marginLeft: 5,
-              }}
-              title="Переключить тему"
-            >
+            <span style={{ fontFamily: 'var(--font-serif)', fontSize: 21, fontWeight: 700, color: 'var(--accent)', letterSpacing: 0.3 }}>Планер</span>
+            {streak > 0 && <span style={{ fontSize: 13, marginLeft: 8 }} title="Дней подряд!">🔥 {streak}</span>}
+            {syncing && <span style={{ fontSize: 12, marginLeft: 8, opacity: 0.5, animation: 'spin 2s linear infinite' }} title="Синхронизация...">☁️</span>}
+            <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} style={{ background: 'transparent', border: 'none', fontSize: 18, cursor: 'pointer', marginLeft: 5 }} title="Переключить тему">
               {theme === 'dark' ? '🌙' : '☀️'}
             </button>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                marginLeft: 15,
-                paddingLeft: 15,
-                borderLeft: '1px solid var(--border)',
-              }}
-            >
-              <span style={{ fontSize: 12, color: 'var(--text-dim)', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {user.email}
-              </span>
-              <button
-                onClick={handleSignOut}
-                style={{
-                  background: 'transparent',
-                  border: '1px solid var(--border-light)',
-                  borderRadius: 6,
-                  color: 'var(--text-dim)',
-                  fontSize: 11,
-                  padding: '4px 8px',
-                  cursor: 'pointer',
-                }}
-              >
-                Выйти
-              </button>
+            <button onClick={() => setIsFocusMode(!isFocusMode)} style={{ background: 'transparent', border: 'none', fontSize: 16, cursor: 'pointer', marginLeft: 5 }} title="Фокус-режим (F)">
+               🎯
+            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 15, paddingLeft: 15, borderLeft: '1px solid var(--border)' }}>
+              <span style={{ fontSize: 12, color: 'var(--text-dim)', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.email}</span>
+              <button onClick={handleSignOut} style={{ background: 'transparent', border: '1px solid var(--border-light)', borderRadius: 6, color: 'var(--text-dim)', fontSize: 11, padding: '4px 8px', cursor: 'pointer' }}>Выйти</button>
             </div>
-            {overdueCount > 0 && (
-              <span
-                style={{
-                  fontSize: 10,
-                  padding: '2px 8px',
-                  borderRadius: 99,
-                  background: 'var(--error-bg)',
-                  color: 'var(--error)',
-                  border: '1px solid rgba(255,112,112,0.2)',
-                }}
-              >
-                {overdueCount} просрочено
-              </span>
-            )}
+            {overdueCount > 0 && <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: 'var(--error-bg)', color: 'var(--error)', border: '1px solid rgba(255,112,112,0.2)' }}>{overdueCount} просрочено</span>}
           </div>
           <div style={{ display: 'flex', gap: 7, alignItems: 'center' }}>
-            {selectedDate !== today && (
-              <button
-                onClick={() => setSelectedDate(today)}
-                style={{
-                  background: 'var(--accent-muted)',
-                  color: 'var(--accent)',
-                  border: '1px solid var(--accent-border)',
-                  borderRadius: 20,
-                  padding: '5px 13px',
-                  fontSize: 12,
-                  cursor: 'pointer',
-                  fontFamily: 'var(--font-main)',
-                  transition: 'background 0.15s',
-                }}
-              >
-                Сегодня
-              </button>
-            )}
-            <button
-              className="cal-toggle"
-              onClick={() => setShowCal((v) => !v)}
-              style={{
-                background: showCal ? 'var(--accent-muted)' : 'transparent',
-                border: '1px solid #242424',
-                borderRadius: 8,
-                padding: '5px 9px',
-                color: showCal ? 'var(--accent)' : 'var(--text-dim)',
-                cursor: 'pointer',
-                fontSize: 15,
-                lineHeight: 1,
-                transition: 'all 0.15s',
-              }}
-            >
-              📅
-            </button>
+            {selectedDate !== today && <button onClick={() => setSelectedDate(today)} style={{ background: 'var(--accent-muted)', color: 'var(--accent)', border: '1px solid var(--accent-border)', borderRadius: 20, padding: '5px 13px', fontSize: 12, cursor: 'pointer', transition: 'background 0.15s' }}>Сегодня</button>}
+            <button className="cal-toggle" onClick={() => setShowCal((v) => !v)} style={{ background: showCal ? 'var(--accent-muted)' : 'transparent', border: '1px solid #242424', borderRadius: 8, padding: '5px 9px', color: showCal ? 'var(--accent)' : 'var(--text-dim)', cursor: 'pointer', fontSize: 15 }}>📅</button>
             <div style={{ position: 'relative' }}>
-              <input
-                type="text"
-                placeholder="Поиск..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                style={{
-                  background: 'var(--bg-input)',
-                  border: '1px solid #222',
-                  borderRadius: 8,
-                  padding: '5px 10px',
-                  color: 'var(--text-highlight)',
-                  fontSize: 13,
-                  width: 150,
-                  outline: 'none',
-                }}
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  style={{
-                    position: 'absolute',
-                    right: 8,
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    background: 'transparent',
-                    border: 'none',
-                    color: '#555',
-                    cursor: 'pointer',
-                  }}
-                >
-                  ×
-                </button>
-              )}
+              <input type="text" placeholder="Поиск..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} style={{ background: 'var(--bg-input)', border: '1px solid #222', borderRadius: 8, padding: '5px 10px', color: 'var(--text-highlight)', fontSize: 13, width: 150, outline: 'none' }} />
+              {searchQuery && <button onClick={() => setSearchQuery('')} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', color: '#555', cursor: 'pointer' }}>×</button>}
             </div>
           </div>
         </header>
 
-        {/* ── Body ── */}
         <div className="layout" style={{ display: 'flex', flex: 1, minHeight: 0 }}>
-          {/* ── Sidebar Desktop ── */}
-          <div
-            className="sidebar-desktop"
-            style={{
-              width: isSidebarCollapsed ? 0 : 252,
-              borderRight: isSidebarCollapsed ? 'none' : '1px solid var(--border)',
-              background: 'var(--bg-surface)',
-              flexShrink: 0,
-              overflowY: 'auto',
-              overflowX: 'hidden',
-              transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-            }}
-          >
-            <SidebarContent
-              calMonth={calMonth}
-              setCalMonth={setCalMonth}
-              selected={selectedDate}
-              setSelected={setSelectedDate}
-              tasks={tasks}
-              today={today}
-              onNavigateMonth={navigateMonth}
-              onClose={null}
-            />
+          <div className="sidebar-desktop" style={{ width: isSidebarCollapsed ? 0 : 252, borderRight: isSidebarCollapsed ? 'none' : '1px solid var(--border)', background: 'var(--bg-surface)', flexShrink: 0, overflowY: 'auto', overflowX: 'hidden', transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)' }}>
+            <SidebarContent calMonth={calMonth} setCalMonth={setCalMonth} selected={selectedDate} setSelected={setSelectedDate} tasks={tasks} today={today} onNavigateMonth={navigateMonth} onClose={null} />
           </div>
 
-          {/* ── Sidebar Mobile Bottom Sheet ── */}
           <div className={`bottom-sheet${showCal ? ' open' : ''}`}>
             <div className="sheet-handle" onClick={() => setShowCal(false)} />
-            <SidebarContent
-              calMonth={calMonth}
-              setCalMonth={setCalMonth}
-              selected={selectedDate}
-              setSelected={setSelectedDate}
-              tasks={tasks}
-              today={today}
-              onNavigateMonth={navigateMonth}
-              onClose={() => setShowCal(false)}
-            />
+            <SidebarContent calMonth={calMonth} setCalMonth={setCalMonth} selected={selectedDate} setSelected={setSelectedDate} tasks={tasks} today={today} onNavigateMonth={navigateMonth} onClose={() => setShowCal(false)} />
           </div>
-          {showCal && (
-            <div
-              style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 90 }}
-              onClick={() => setShowCal(false)}
-            />
-          )}
+          {showCal && <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 90 }} onClick={() => setShowCal(false)} />}
 
-          {/* ── Main ── */}
-          <div
-            className="main-area"
-            style={{ flex: 1, padding: '22px 26px', overflowY: 'auto', minWidth: 0 }}
-          >
+          <div className="main-area" style={{ flex: 1, padding: '22px 26px', overflowY: 'auto', minWidth: 0 }}>
+            {isFocusMode && (
+              <button onClick={() => setIsFocusMode(false)} style={{ marginBottom: 20, background: 'none', border: '1px solid var(--border)', color: 'var(--text-dim)', padding: '4px 12px', borderRadius: 20, cursor: 'pointer', fontSize: 12 }}>
+                ← Выйти из фокуса
+              </button>
+            )}
+
             <DayHeader date={selectedDate} today={today} dayTasks={dayTasks} />
+            <WeekStrip selectedDate={selectedDate} today={today} tasks={tasks} setSelectedDate={setSelectedDate} />
+            <Toolbar total={total} done={done} onClearCompleted={() => clearCompleted(selectedDate)} setShowStats={setShowStats} setShowAI={setShowAI} onAddTask={() => { setForm(EMPTY_FORM); setEditing(null); setModal(true); }} />
 
-            <WeekStrip
-               selectedDate={selectedDate}
-               today={today}
-               tasks={tasks}
-               setSelectedDate={setSelectedDate}
-            />
-
-            <Toolbar
-               total={total}
-               done={done}
-               onClearCompleted={() => clearCompleted(selectedDate)}
-               setShowStats={setShowStats}
-               setShowAI={setShowAI}
-               onAddTask={() => {
-                 setForm(EMPTY_FORM)
-                 setEditing(null)
-                 setModal(true)
-               }}
-            />
-
-            {/* Task list with DND */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 7, paddingBottom: 90 }}>
               {sortedTasks.length === 0 ? (
-                <div
-                  style={{
-                    textAlign: 'center',
-                    padding: '56px 20px',
-                    opacity: 0.6,
-                    animation: 'taskIn 0.5s ease',
-                  }}
-                >
+                <div style={{ textAlign: 'center', padding: '56px 20px', opacity: 0.6 }}>
                   <div style={{ fontSize: 48, marginBottom: 16 }}>✨</div>
-                  <div
-                    style={{
-                      fontFamily: 'var(--font-serif)',
-                      fontSize: 24,
-                      marginBottom: 8,
-                      color: 'var(--text-bright)',
-                    }}
-                  >
-                    {selectedDate < today ? 'День прошёл чисто' : 'Начни свой день'}
-                  </div>
-                  <div style={{ fontSize: 14, color: 'var(--text-dim)', maxWidth: 300, margin: '0 auto' }}>
-                    {selectedDate < today
-                      ? 'Нечего переносить — отличная работа!'
-                      : 'Нажми кнопку + внизу, чтобы добавить свою первую задачу.'}
-                  </div>
-                  {selectedDate >= today && (
-                    <div style={{ marginTop: 24, fontSize: 24, animation: 'spin 4s linear infinite' }}>
-                      ✦
-                    </div>
-                  )}
+                  <div style={{ fontFamily: 'var(--font-serif)', fontSize: 24, marginBottom: 8, color: 'var(--text-bright)' }}>{selectedDate < today ? 'День прошёл чисто' : 'Начни свой день'}</div>
+                  <div style={{ fontSize: 14, color: 'var(--text-dim)', maxWidth: 300, margin: '0 auto' }}>{selectedDate < today ? 'Нечего переносить — отличная работа!' : 'Нажми кнопку + внизу, чтобы добавить свою первую задачу.'}</div>
                 </div>
               ) : (
-                <DndContext
-                  sensors={sensors}
-                  collisionDetection={closestCenter}
-                  onDragEnd={handleDragEnd}
-                >
+                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                   <SortableContext items={sortedTasks} strategy={verticalListSortingStrategy}>
                     {sortedTasks.map((task) => (
-                      <TaskCard
-                        key={task.id}
-                        task={task}
-                        isNew={task.id === newTaskId}
-                        onToggle={() => toggleTask(selectedDate, task.id)}
-                        onMove={(newDate) => moveTask(selectedDate, newDate, task.id)}
-                        onEdit={() => {
-                          setForm({
-                            title: task.title,
-                            note: task.note || '',
-                            time: task.time || '',
-                            priority: task.priority,
-                            repeat: task.repeat || 'none',
-                            emoji: task.emoji || '📌',
-                          })
-                          setEditing({ ...task, date: selectedDate })
-                          setModal(true)
-                        }}
-                        onDelete={() => setConfirmDelete(task.id)}
-                      />
+                      <TaskCard key={task.id} task={task} isNew={task.id === newTaskId} onToggle={() => toggleTask(selectedDate, task.id)} onMove={(newDate) => moveTask(selectedDate, newDate, task.id)} onEdit={() => { setForm({ title: task.title, note: task.note || '', time: task.time || '', priority: task.priority, repeat: task.repeat || 'none', emoji: task.emoji || '📌', tags: task.tags || [] }); setEditing({ ...task, date: selectedDate }); setModal(true); }} onDelete={() => setConfirmDelete(task.id)} />
                     ))}
                   </SortableContext>
                 </DndContext>
               )}
             </div>
 
-            {/* FAB */}
-            <button
-              onClick={() => {
-                setForm(EMPTY_FORM)
-                setEditing(null)
-                setModal(true)
-              }}
-              title="Добавить задачу (N)"
-              className="fab-btn"
-              style={{
-                position: 'fixed',
-                bottom: 26,
-                right: 26,
-                width: 52,
-                height: 52,
-                borderRadius: '50%',
-                background: 'var(--accent)',
-                color: '#0C0C0C',
-                border: 'none',
-                fontSize: 26,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 4px 22px rgba(232,168,124,0.35)',
-                transition: 'transform 0.15s, box-shadow 0.15s',
-                fontWeight: 300,
-                lineHeight: 1,
-                zIndex: 80,
-              }}
-            >
-              +
-            </button>
+            <button onClick={() => { setForm(EMPTY_FORM); setEditing(null); setModal(true); }} title="Добавить задачу (N)" className="fab-btn" style={{ position: 'fixed', bottom: 26, right: 26, width: 52, height: 52, borderRadius: '50%', background: 'var(--accent)', color: '#0C0C0C', border: 'none', fontSize: 26, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 22px rgba(232,168,124,0.35)', transition: 'transform 0.15s, box-shadow 0.15s', fontWeight: 300, zIndex: 80 }}>+</button>
           </div>
         </div>
 
         <Suspense fallback={null}>
-          {modal && (
-            <Modal
-              editing={editing}
-              form={form}
-              setForm={setForm}
-              onSubmit={handleSubmit}
-              onClose={handleCloseModal}
-              selectedDate={selectedDate}
-            />
-          )}
-          {showAI && (
-            <AISuggestPanel
-              dateStr={selectedDate}
-              existingTasks={dayTasks}
-              onAdd={(s) => addTask(selectedDate, s)}
-              onClose={() => setShowAI(false)}
-            />
-          )}
+          {modal && <Modal editing={editing} form={form} setForm={setForm} onSubmit={handleSubmit} onClose={handleCloseModal} />}
+          {showAI && <AISuggestPanel dateStr={selectedDate} existingTasks={dayTasks} onAdd={(s) => addTask(selectedDate, s)} onClose={() => setShowAI(false)} />}
           {showStats && <Statistics tasks={tasks} onClose={() => setShowStats(false)} />}
-          {confirmDelete && (
-            <ConfirmModal
-              title="Удалить задачу?"
-              message="Это действие нельзя будет отменить."
-              onConfirm={() => {
-                deleteTask(selectedDate, confirmDelete)
-                setConfirmDelete(null)
-              }}
-              onCancel={() => setConfirmDelete(null)}
-            />
-          )}
+          {confirmDelete && <ConfirmModal title="Удалить задачу?" message="Это действие нельзя будет отменить." onConfirm={() => { deleteTask(selectedDate, confirmDelete); setConfirmDelete(null); }} onCancel={() => setConfirmDelete(null)} />}
         </Suspense>
       </div>
     </>

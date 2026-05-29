@@ -1,6 +1,8 @@
 import { MiniCalendar } from './MiniCalendar'
 import { addDays, strToDate } from '../utils/date'
 import { MONTHS_GEN } from '../constants'
+import { exportTasks, importTasks } from '../utils/storage'
+import toast from 'react-hot-toast'
 
 export const SidebarContent = ({
   calMonth,
@@ -183,6 +185,40 @@ export const SidebarContent = ({
           </div>
         )
       })()}
+
+      <div style={{ marginTop: 'auto', padding: '20px 0', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 8, padding: '0 14px' }}>
+           <button
+             onClick={() => exportTasks(tasks)}
+             style={{ flex: 1, background: 'none', border: '1px solid var(--border)', color: 'var(--text-dim)', fontSize: 11, padding: '8px', borderRadius: 6, cursor: 'pointer' }}
+           >
+             Экспорт
+           </button>
+           <label style={{ flex: 1, background: 'none', border: '1px solid var(--border)', color: 'var(--text-dim)', fontSize: 11, padding: '8px', borderRadius: 6, cursor: 'pointer', textAlign: 'center' }}>
+             Импорт
+             <input
+               type="file"
+               hidden
+               onChange={async (e) => {
+                 const file = e.target.files[0];
+                 if (!file) return;
+                 try {
+                   const data = await importTasks(file);
+                   if (window.confirm('Заменить текущие задачи данными из файла?')) {
+                     localStorage.setItem('planner_v2', JSON.stringify(data));
+                     window.location.reload();
+                   }
+                 } catch (err) {
+                   toast.error('Ошибка импорта');
+                 }
+               }}
+             />
+           </label>
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--text-dark)', textAlign: 'center', opacity: 0.5 }}>
+          v2.0.0
+        </div>
+      </div>
     </div>
   )
 }

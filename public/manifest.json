@@ -1,0 +1,16 @@
+{
+  "name": "Эстетичный Планер ✦",
+  "short_name": "Планер",
+  "description": "Твой личный помощник в продуктивности",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0C0C0C",
+  "theme_color": "#E8A87C",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2098/2098402.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

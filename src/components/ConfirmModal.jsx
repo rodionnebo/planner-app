@@ -1,4 +1,3 @@
-import React from 'react'
 
 export const ConfirmModal = ({ title, message, onConfirm, onCancel }) => {
   return (

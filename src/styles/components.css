@@ -1,0 +1,169 @@
+.act-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 4px 5px;
+  border-radius: 6px;
+  opacity: 0;
+  transition:
+    opacity 0.2s,
+    transform 0.15s;
+}
+.task-card:hover .act-btn {
+  opacity: 0.6;
+}
+.act-btn:hover {
+  opacity: 1 !important;
+  transform: scale(1.15);
+}
+
+.check-btn:hover {
+  transform: scale(1.12);
+}
+input[type='time'] {
+  color-scheme: dark;
+}
+.light-theme input[type='time'] {
+  color-scheme: light;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 2px var(--accent-border);
+}
+
+.week-btn:hover {
+  background: var(--accent-muted) !important;
+  border-color: var(--accent-border) !important;
+}
+
+.sidebar-desktop {
+  display: block;
+  padding: 20px 0;
+}
+
+.fab-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 30px rgba(232, 168, 124, 0.55) !important;
+}
+
+.mini-cal {
+  padding: 0 15px;
+  margin-bottom: 20px;
+}
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  text-align: center;
+}
+.cal-dow {
+  font-size: 10px;
+  color: var(--text-dark);
+  padding: 5px 0;
+}
+.cal-day {
+  font-size: 12px;
+  padding: 8px 0;
+  cursor: pointer;
+  border-radius: 6px;
+  position: relative;
+}
+.cal-day:hover {
+  background: var(--border);
+}
+.cal-day.selected {
+  background: var(--accent-muted);
+  color: var(--accent);
+  font-weight: bold;
+}
+.cal-day.today {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.cal-dot {
+  width: 3px;
+  height: 3px;
+  background: var(--accent);
+  border-radius: 50%;
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.cal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+.cal-header button {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 18px;
+}
+
+/* Bottom Sheet for Mobile */
+.bottom-sheet {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border);
+  border-top-left-radius: 24px;
+  border-top-right-radius: 24px;
+  z-index: 100;
+  transform: translateY(100%);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.3);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.bottom-sheet.open {
+  transform: translateY(0);
+}
+
+.sheet-handle {
+  width: 40px;
+  height: 4px;
+  background: var(--border-light);
+  border-radius: 2px;
+  margin: 12px auto;
+}
+
+@media (max-width: 680px) {
+  .layout {
+    flex-direction: column !important;
+  }
+  .sidebar-desktop {
+    display: none;
+  }
+  .main-area {
+    padding: 16px 14px !important;
+  }
+  .week-label {
+    display: none !important;
+  }
+  .keyboard-hints {
+    display: none !important;
+  }
+  .act-btn {
+    opacity: 0.4;
+  }
+}
+@media (min-width: 681px) {
+  .sidebar-mobile {
+    display: none !important;
+  }
+  .cal-toggle {
+    display: none !important;
+  }
+}

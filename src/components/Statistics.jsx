@@ -1,4 +1,5 @@
-import React, { useMemo } from 'react'
+import { useMemo } from 'react'
+import { MONTHS_GEN, PRIORITY_ORDER } from '../constants'
 
 export const Statistics = ({ tasks, onClose }) => {
   const stats = useMemo(() => {
@@ -8,134 +9,93 @@ export const Statistics = ({ tasks, onClose }) => {
       return d.toISOString().split('T')[0]
     })
 
-    return last7Days.map((date) => {
+    const chartData = last7Days.map((date) => {
       const dayTasks = tasks[date] || []
-      const completed = dayTasks.filter((t) => t.completed).length
-      const total = dayTasks.length
-      return { date, completed, total }
+      return {
+        date,
+        total: dayTasks.length,
+        done: dayTasks.filter((t) => t.completed).length,
+      }
     })
+
+    const allTasks = Object.values(tasks).flat()
+    const total = allTasks.length
+    const completed = allTasks.filter((t) => t.completed).length
+    const priorityStats = allTasks.reduce((acc, t) => {
+      acc[t.priority] = (acc[t.priority] || 0) + 1
+      return acc
+    }, {})
+
+    return { chartData, total, completed, priorityStats }
   }, [tasks])
 
-  const maxTasks = Math.max(...stats.map((s) => s.total), 1)
+  const maxVal = Math.max(...stats.chartData.map((d) => d.total), 1)
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(0,0,0,0.85)',
-        backdropFilter: 'blur(10px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 400,
-        padding: 20,
-      }}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div
-        style={{
-          background: 'var(--bg-modal)',
-          borderRadius: 24,
-          padding: 30,
-          width: '100%',
-          maxWidth: 600,
-          border: '1px solid var(--border-modal)',
-          boxShadow: '0 40px 100px rgba(0,0,0,0.8)',
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: 30,
-          }}
-        >
-          <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: 24, color: 'var(--text-bright)' }}>
-            Продуктивность
-          </h2>
-          <button
-            onClick={onClose}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: 'var(--text-dim)',
-              fontSize: 24,
-              cursor: 'pointer',
-            }}
-          >
-            ×
-          </button>
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content stats-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>Статистика продуктивности</h2>
+          <button className="close-btn" onClick={onClose}>×</button>
         </div>
 
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'flex-end',
-            justifyContent: 'space-between',
-            height: 200,
-            gap: 15,
-            marginBottom: 20,
-            padding: '0 10px',
-          }}
-        >
-          {stats.map((s, i) => (
-            <div
-              key={s.date}
-              style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}
-            >
-              <div
-                style={{
-                  width: '100%',
-                  background: '#1a1a1a',
-                  borderRadius: 6,
-                  height: 160,
-                  position: 'relative',
-                  overflow: 'hidden',
-                }}
-              >
-                {/* Total bar */}
+        <div className="stats-grid">
+          <div className="stat-card">
+            <div className="stat-val">{stats.total}</div>
+            <div className="stat-label">Всего задач</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-val" style={{ color: 'var(--success)' }}>
+              {stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0}%
+            </div>
+            <div className="stat-label">Выполнено</div>
+          </div>
+        </div>
+
+        <div className="chart-container">
+          <div className="chart-title">Активность за 7 дней</div>
+          <div className="chart">
+            {stats.chartData.map((d) => {
+              const dateObj = new Date(d.date)
+              return (
+                <div key={d.date} className="chart-col">
+                  <div className="chart-bars">
+                    <div
+                      className="chart-bar total"
+                      style={{ height: `${(d.total / maxVal) * 100}%` }}
+                    />
+                    <div
+                      className="chart-bar done"
+                      style={{ height: `${(d.done / maxVal) * 100}%` }}
+                    />
+                  </div>
+                  <div className="chart-label">
+                    {dateObj.getDate()} {MONTHS_GEN[dateObj.getMonth()].slice(0, 3)}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        <div className="priority-stats">
+          <div className="chart-title">По приоритетам</div>
+          {Object.keys(PRIORITY_ORDER).map((p) => (
+            <div key={p} className="priority-row">
+              <span style={{ textTransform: 'capitalize', fontSize: 13, color: 'var(--text-dim)' }}>
+                {p === 'deadline' ? 'Срочно' : p === 'high' ? 'Высокий' : p === 'medium' ? 'Средний' : 'Низкий'}
+              </span>
+              <div className="priority-bar-bg">
                 <div
-                  style={{
-                    position: 'absolute',
-                    bottom: 0,
-                    width: '100%',
-                    height: `${(s.total / maxTasks) * 100}%`,
-                    background: 'var(--accent-muted)',
-                    transition: 'height 0.5s ease',
-                  }}
-                />
-                {/* Completed bar */}
-                <div
-                  style={{
-                    position: 'absolute',
-                    bottom: 0,
-                    width: '100%',
-                    height: `${(s.completed / maxTasks) * 100}%`,
-                    background: 'var(--success)',
-                    transition: 'height 0.5s ease',
-                  }}
+                  className={`priority-bar ${p}`}
+                  style={{ width: `${(stats.priorityStats[p] || 0) / (stats.total || 1) * 100}%` }}
                 />
               </div>
-              <span style={{ fontSize: 10, color: 'var(--text-dark)', marginTop: 8 }}>
-                {s.date.split('-').slice(1).reverse().join('.')}
+              <span style={{ fontSize: 13, width: 25, textAlign: 'right' }}>
+                {stats.priorityStats[p] || 0}
               </span>
             </div>
           ))}
-        </div>
-
-        <div style={{ display: 'flex', gap: 20, justifyContent: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div style={{ width: 10, height: 10, borderRadius: 2, background: 'var(--success)' }} />
-            <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>Выполнено</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div
-              style={{ width: 10, height: 10, borderRadius: 2, background: 'var(--accent-muted)' }}
-            />
-            <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>Всего задач</span>
-          </div>
         </div>
       </div>
     </div>

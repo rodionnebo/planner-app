@@ -78,6 +78,7 @@ export const EMPTY_FORM = {
   title: '',
   note: '',
   time: '',
+  date: '',
   priority: 'medium',
   repeat: 'none',
   emoji: '📌',

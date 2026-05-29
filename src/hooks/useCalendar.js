@@ -1,17 +1,14 @@
-import { useState, useCallback, useEffect } from 'react'
-import { todayStr, strToDate } from '../utils/date'
+import { useState, useCallback } from 'react'
+import { strToDate, dateToStr } from '../utils/date'
 
 export function useCalendar() {
-  const [selectedDate, setSelectedDate] = useState(todayStr())
-  const [calMonth, setCalMonth] = useState(() => {
-    const n = new Date()
-    return { y: n.getFullYear(), m: n.getMonth() }
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const d = new Date()
+    return dateToStr(d)
   })
 
-  useEffect(() => {
-    const d = strToDate(selectedDate)
-    setCalMonth({ y: d.getFullYear(), m: d.getMonth() })
-  }, [selectedDate])
+  const d = strToDate(selectedDate)
+  const [calMonth, setCalMonth] = useState({ y: d.getFullYear(), m: d.getMonth() })
 
   const navigateMonth = useCallback((delta) => {
     setCalMonth((prev) => {

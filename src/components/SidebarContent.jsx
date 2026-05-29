@@ -1,4 +1,3 @@
-import React from 'react'
 import { MiniCalendar } from './MiniCalendar'
 import { addDays, strToDate } from '../utils/date'
 import { MONTHS_GEN } from '../constants'

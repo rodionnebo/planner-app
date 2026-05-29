@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react'
 import { Toaster } from 'react-hot-toast'
 import confetti from 'canvas-confetti'
 import {
@@ -21,12 +21,18 @@ import { useTasks } from './hooks/useTasks.jsx'
 import { useCalendar } from './hooks/useCalendar'
 import { TaskCard } from './components/TaskCard'
 import { SidebarContent } from './components/SidebarContent'
-import { Modal } from './components/Modal'
-import { AISuggestPanel } from './components/AISuggestPanel'
-import { Statistics } from './components/Statistics'
-import { ConfirmModal } from './components/ConfirmModal'
-import { EMPTY_FORM, DAYS_FULL, MONTHS_GEN, DAYS_SHORT, PRIORITY_ORDER } from './constants'
-import { todayStr, addDays, strToDate, relLabel, parseQuickAdd } from './utils/date'
+import { WeekStrip } from './components/WeekStrip'
+import { DayHeader } from './components/DayHeader'
+import { Toolbar } from './components/Toolbar'
+import { EMPTY_FORM, PRIORITY_ORDER } from './constants'
+import { todayStr, addDays, parseQuickAdd } from './utils/date'
+import { requestNotificationPermission, scheduleTaskNotifications } from './utils/notifications'
+
+// Lazy components
+const Modal = lazy(() => import('./components/Modal').then(m => ({ default: m.Modal })))
+const AISuggestPanel = lazy(() => import('./components/AISuggestPanel').then(m => ({ default: m.AISuggestPanel })))
+const Statistics = lazy(() => import('./components/Statistics').then(m => ({ default: m.Statistics })))
+const ConfirmModal = lazy(() => import('./components/ConfirmModal').then(m => ({ default: m.ConfirmModal })))
 
 export default function App() {
   const [user, setUser] = useState(null)
@@ -35,6 +41,9 @@ export default function App() {
   const [showAI, setShowAI] = useState(false)
   const [showStats, setShowStats] = useState(false)
   const [theme, setTheme] = useState(() => localStorage.getItem('planner_theme') || 'dark')
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(
+    () => localStorage.getItem('planner_sidebar_collapsed') === 'true'
+  )
   const [modal, setModal] = useState(false)
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(EMPTY_FORM)
@@ -59,6 +68,15 @@ export default function App() {
     }
     localStorage.setItem('planner_theme', theme)
   }, [theme])
+
+  useEffect(() => {
+    localStorage.setItem('planner_sidebar_collapsed', isSidebarCollapsed)
+  }, [isSidebarCollapsed])
+
+  // Notification permission
+  useEffect(() => {
+    requestNotificationPermission()
+  }, [])
 
   // Dynamic today update
   useEffect(() => {
@@ -87,6 +105,7 @@ export default function App() {
     tasks,
     setTasks,
     loading,
+    syncing,
     addTask,
     editTask,
     deleteTask,
@@ -96,6 +115,11 @@ export default function App() {
     getTasksForDate,
   } = useTasks(user)
 
+  // Notification scheduling
+  useEffect(() => {
+    scheduleTaskNotifications(tasks)
+  }, [tasks])
+
   const { selectedDate, setSelectedDate, calMonth, setCalMonth, navigateMonth } = useCalendar()
 
   const handleCloseModal = useCallback(() => {
@@ -103,6 +127,13 @@ export default function App() {
     setEditing(null)
     setForm(EMPTY_FORM)
   }, [])
+
+  const handleSignOut = async () => {
+    if (window.confirm('Вы уверены, что хотите выйти?')) {
+      await supabase.auth.signOut()
+      setUser(null)
+    }
+  }
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -154,27 +185,25 @@ export default function App() {
         return PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority]
       })
     }
-    // If not searching, we use the order from the tasks array (DND order)
     return filteredTasks
   }, [filteredTasks, searchQuery])
 
   const total = dayTasks.length
   const done = dayTasks.filter((t) => t.completed).length
-  const isPast = selectedDate < today
-  const rel = relLabel(selectedDate)
-  const d = strToDate(selectedDate)
 
   // Confetti effect
   useEffect(() => {
-    if (total > 0 && done === total) {
+    const lastDone = localStorage.getItem(`done_confetti_${selectedDate}`)
+    if (total > 0 && done === total && lastDone !== 'true') {
       confetti({
         particleCount: 100,
         spread: 70,
         origin: { y: 0.6 },
         colors: ['#E8A87C', '#6DBF7E', '#7CA8E8'],
       })
+      localStorage.setItem(`done_confetti_${selectedDate}`, 'true')
     }
-  }, [done, total])
+  }, [done, total, selectedDate])
 
   const overdueCount = useMemo(() => {
     return Object.entries(tasks).reduce((acc, [date, list]) => {
@@ -185,9 +214,11 @@ export default function App() {
     }, 0)
   }, [tasks, today])
 
-  const weekDays = useMemo(() => {
-    return Array.from({ length: 7 }, (_, i) => addDays(today, -3 + i))
-  }, [today])
+  // Reset scroll on date change
+  useEffect(() => {
+    const mainArea = document.querySelector('.main-area')
+    if (mainArea) mainArea.scrollTop = 0
+  }, [selectedDate])
 
   const handleSubmit = useCallback(() => {
     if (!form.title.trim()) return
@@ -195,14 +226,20 @@ export default function App() {
     const finalForm = editing ? form : { ...form, ...parseQuickAdd(form.title) }
 
     if (editing) {
-      editTask(editing.date, editing.id, finalForm)
+      if (finalForm.date && finalForm.date !== editing.date) {
+        moveTask(editing.date, finalForm.date, editing.id)
+        editTask(finalForm.date, editing.id, finalForm)
+      } else {
+        editTask(editing.date, editing.id, finalForm)
+      }
     } else {
-      const id = addTask(selectedDate, finalForm)
+      const targetDate = finalForm.date || selectedDate
+      const id = addTask(targetDate, finalForm)
       setNewTaskId(id)
       setTimeout(() => setNewTaskId(null), 800)
     }
     handleCloseModal()
-  }, [form, editing, selectedDate, editTask, addTask, handleCloseModal])
+  }, [form, editing, selectedDate, editTask, addTask, moveTask, handleCloseModal])
 
   const handleDragEnd = (event) => {
     const { active, over } = event
@@ -214,7 +251,6 @@ export default function App() {
       const newTasks = { ...tasks }
       newTasks[selectedDate] = newList
       setTasks(newTasks)
-      // Save order to Supabase could be implemented here as well
     }
   }
 
@@ -269,6 +305,22 @@ export default function App() {
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+            <button
+              onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                fontSize: 18,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--accent)',
+              }}
+              title={isSidebarCollapsed ? 'Развернуть сайдбар' : 'Свернуть сайдбар'}
+            >
+              {isSidebarCollapsed ? '»' : '«'}
+            </button>
             <span style={{ fontSize: 18 }}>✦</span>
             <span
               style={{
@@ -281,6 +333,14 @@ export default function App() {
             >
               Планер
             </span>
+            {syncing && (
+               <span
+                 style={{ fontSize: 12, marginLeft: 8, opacity: 0.5, animation: 'spin 2s linear infinite' }}
+                 title="Синхронизация..."
+               >
+                 ☁️
+               </span>
+            )}
             <button
               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
               style={{
@@ -294,6 +354,34 @@ export default function App() {
             >
               {theme === 'dark' ? '🌙' : '☀️'}
             </button>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                marginLeft: 15,
+                paddingLeft: 15,
+                borderLeft: '1px solid var(--border)',
+              }}
+            >
+              <span style={{ fontSize: 12, color: 'var(--text-dim)', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {user.email}
+              </span>
+              <button
+                onClick={handleSignOut}
+                style={{
+                  background: 'transparent',
+                  border: '1px solid var(--border-light)',
+                  borderRadius: 6,
+                  color: 'var(--text-dim)',
+                  fontSize: 11,
+                  padding: '4px 8px',
+                  cursor: 'pointer',
+                }}
+              >
+                Выйти
+              </button>
+            </div>
             {overdueCount > 0 && (
               <span
                 style={{
@@ -380,20 +468,6 @@ export default function App() {
                 </button>
               )}
             </div>
-            <div
-              className="keyboard-hints"
-              style={{
-                fontSize: 11,
-                color: 'var(--text-dark)',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'flex-end',
-                gap: 1,
-              }}
-            >
-              <span style={{ letterSpacing: 0.5 }}>N — добавить</span>
-              <span style={{ letterSpacing: 0.5 }}>← → — навигация</span>
-            </div>
           </div>
         </header>
 
@@ -403,11 +477,13 @@ export default function App() {
           <div
             className="sidebar-desktop"
             style={{
-              width: 252,
-              borderRight: '1px solid var(--border)',
+              width: isSidebarCollapsed ? 0 : 252,
+              borderRight: isSidebarCollapsed ? 'none' : '1px solid var(--border)',
               background: 'var(--bg-surface)',
               flexShrink: 0,
               overflowY: 'auto',
+              overflowX: 'hidden',
+              transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
             }}
           >
             <SidebarContent
@@ -448,236 +524,60 @@ export default function App() {
             className="main-area"
             style={{ flex: 1, padding: '22px 26px', overflowY: 'auto', minWidth: 0 }}
           >
-            {/* Date header */}
-            <div style={{ marginBottom: 20 }}>
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'baseline',
-                  gap: 10,
-                  flexWrap: 'wrap',
-                  marginBottom: 3,
-                }}
-              >
-                <h1
-                  style={{
-                    fontFamily: 'var(--font-serif)',
-                    fontSize: 38,
-                    fontWeight: 700,
-                    color: 'var(--text-bright)',
-                    lineHeight: 1,
-                  }}
-                >
-                  {d.getDate()} {MONTHS_GEN[d.getMonth()]}
-                </h1>
-                {rel && (
-                  <span
-                    style={{
-                      padding: '3px 12px',
-                      borderRadius: 20,
-                      fontSize: 11.5,
-                      fontWeight: 500,
-                      background: rel === 'Сегодня' ? 'var(--accent-muted)' : 'rgba(255,255,255,0.04)',
-                      color: rel === 'Сегодня' ? 'var(--accent)' : 'var(--text-dim)',
-                      border: `1px solid ${rel === 'Сегодня' ? 'var(--accent-border)' : '#222'}`,
-                    }}
-                  >
-                    {rel}
-                  </span>
-                )}
-                {isPast && dayTasks.some((t) => !t.completed) && (
-                  <span
-                    style={{
-                      padding: '3px 12px',
-                      borderRadius: 20,
-                      fontSize: 11.5,
-                      background: 'var(--error-bg)',
-                      color: 'var(--error)',
-                      border: '1px solid rgba(255,112,112,0.2)',
-                    }}
-                  >
-                    ⚠ Есть незавершённые
-                  </span>
-                )}
-              </div>
-              <div style={{ fontSize: 12.5, color: 'var(--text-dark)', textTransform: 'capitalize' }}>
-                {DAYS_FULL[(d.getDay() + 6) % 7]}, {d.getFullYear()} г.
-              </div>
-            </div>
+            <DayHeader date={selectedDate} today={today} dayTasks={dayTasks} />
 
-            {/* Week strip */}
-            <div
-              style={{ display: 'flex', gap: 5, marginBottom: 22, overflowX: 'auto', paddingBottom: 2 }}
-            >
-              {weekDays.map((ds) => {
-                const dd = strToDate(ds)
-                const isSel = ds === selectedDate
-                const isT = ds === today
-                const wTasks = tasks[ds] || []
-                const wDone = wTasks.filter((t) => t.completed).length
-                const wOverdue = ds < today && wTasks.length > 0 && wDone < wTasks.length
-                return (
-                  <button
-                    key={ds}
-                    onClick={() => setSelectedDate(ds)}
-                    className="week-btn"
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      gap: 3,
-                      padding: '9px 12px',
-                      borderRadius: 12,
-                      cursor: 'pointer',
-                      flexShrink: 0,
-                      border: `1px solid ${isSel ? 'rgba(232,168,124,0.6)' : isT ? 'var(--accent-border)' : '#1e1e1e'}`,
-                      background: isSel ? 'var(--accent-muted)' : isT ? 'rgba(232,168,124,0.04)' : 'transparent',
-                      transition: 'all 0.15s',
-                    }}
-                  >
-                    <span
-                      className="week-label"
-                      style={{ fontSize: 9.5, color: 'var(--text-dark)', letterSpacing: 0.5, fontWeight: 700 }}
-                    >
-                      {DAYS_SHORT[(dd.getDay() + 6) % 7]}
-                    </span>
-                    <span
-                      style={{
-                        fontSize: 15,
-                        fontWeight: 700,
-                        color: isSel ? 'var(--accent)' : isT ? 'var(--accent)' : wOverdue ? 'var(--error)' : 'var(--text-dim)',
-                      }}
-                    >
-                      {dd.getDate()}
-                    </span>
-                    {wTasks.length > 0 ? (
-                      <div
-                        style={{
-                          width: 5,
-                          height: 5,
-                          borderRadius: '50%',
-                          background: wOverdue ? 'var(--error)' : wDone === wTasks.length ? 'var(--success)' : 'var(--accent)',
-                        }}
-                      />
-                    ) : (
-                      <div style={{ width: 5, height: 5 }} />
-                    )}
-                  </button>
-                )
-              })}
-            </div>
+            <WeekStrip
+               selectedDate={selectedDate}
+               today={today}
+               tasks={tasks}
+               setSelectedDate={setSelectedDate}
+            />
 
-            {/* Toolbar */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                marginBottom: 14,
-                gap: 8,
-                flexWrap: 'wrap',
-              }}
-            >
-              <span style={{ fontSize: 12.5, color: 'var(--text-dark)' }}>
-                {total === 0 ? 'Задач нет' : `${total} ${total === 1 ? 'задача' : total < 5 ? 'задачи' : 'задач'}`}
-                {done > 0 && ` · ${done} выполнено`}
-              </span>
-              <div style={{ display: 'flex', gap: 7, alignItems: 'center' }}>
-                {done > 0 && (
-                  <button
-                    onClick={() => clearCompleted(selectedDate)}
-                    style={{
-                      background: 'transparent',
-                      color: 'var(--text-dim)',
-                      border: '1px solid #242424',
-                      borderRadius: 20,
-                      padding: '5px 12px',
-                      fontSize: 12,
-                      cursor: 'pointer',
-                      fontFamily: 'var(--font-main)',
-                      transition: 'all 0.15s',
-                    }}
-                  >
-                    Очистить выполненные
-                  </button>
-                )}
-                <button
-                  onClick={() => setShowStats(true)}
-                  style={{
-                    background: 'transparent',
-                    color: 'var(--text-dim)',
-                    border: '1px solid #242424',
-                    borderRadius: 20,
-                    padding: '5px 13px',
-                    fontSize: 12,
-                    cursor: 'pointer',
-                    fontFamily: 'var(--font-main)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 5,
-                    transition: 'all 0.15s',
-                  }}
-                >
-                  📊 Статистика
-                </button>
-                <button
-                  onClick={() => setShowAI(true)}
-                  style={{
-                    background: 'rgba(124,168,232,0.08)',
-                    color: 'var(--priority-medium)',
-                    border: '1px solid rgba(124,168,232,0.2)',
-                    borderRadius: 20,
-                    padding: '5px 13px',
-                    fontSize: 12,
-                    cursor: 'pointer',
-                    fontFamily: 'var(--font-main)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 5,
-                    transition: 'all 0.15s',
-                  }}
-                >
-                  ✨ AI
-                </button>
-                <button
-                  onClick={() => {
-                    setForm(EMPTY_FORM)
-                    setEditing(null)
-                    setModal(true)
-                  }}
-                  style={{
-                    background: 'var(--accent-muted)',
-                    color: 'var(--accent)',
-                    border: '1px solid var(--accent-border)',
-                    borderRadius: 20,
-                    padding: '5px 14px',
-                    fontSize: 12,
-                    cursor: 'pointer',
-                    fontFamily: 'var(--font-main)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 5,
-                    transition: 'all 0.15s',
-                  }}
-                >
-                  <span style={{ fontSize: 16, lineHeight: 1, marginTop: -1 }}>+</span> Задача
-                </button>
-              </div>
-            </div>
+            <Toolbar
+               total={total}
+               done={done}
+               onClearCompleted={() => clearCompleted(selectedDate)}
+               setShowStats={setShowStats}
+               setShowAI={setShowAI}
+               onAddTask={() => {
+                 setForm(EMPTY_FORM)
+                 setEditing(null)
+                 setModal(true)
+               }}
+            />
 
             {/* Task list with DND */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 7, paddingBottom: 90 }}>
               {sortedTasks.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '56px 20px', opacity: 0.25 }}>
-                  <div style={{ fontSize: 32, marginBottom: 12 }}>✦</div>
-                  <div style={{ fontFamily: 'var(--font-serif)', fontSize: 19, marginBottom: 5 }}>
-                    {isPast ? 'День прошёл чисто' : 'Задач нет'}
+                <div
+                  style={{
+                    textAlign: 'center',
+                    padding: '56px 20px',
+                    opacity: 0.6,
+                    animation: 'taskIn 0.5s ease',
+                  }}
+                >
+                  <div style={{ fontSize: 48, marginBottom: 16 }}>✨</div>
+                  <div
+                    style={{
+                      fontFamily: 'var(--font-serif)',
+                      fontSize: 24,
+                      marginBottom: 8,
+                      color: 'var(--text-bright)',
+                    }}
+                  >
+                    {selectedDate < today ? 'День прошёл чисто' : 'Начни свой день'}
                   </div>
-                  <div style={{ fontSize: 12.5 }}>
-                    {isPast
-                      ? 'Нечего переносить — отличная работа'
-                      : 'Нажми + или N чтобы добавить задачу'}
+                  <div style={{ fontSize: 14, color: 'var(--text-dim)', maxWidth: 300, margin: '0 auto' }}>
+                    {selectedDate < today
+                      ? 'Нечего переносить — отличная работа!'
+                      : 'Нажми кнопку + внизу, чтобы добавить свою первую задачу.'}
                   </div>
+                  {selectedDate >= today && (
+                    <div style={{ marginTop: 24, fontSize: 24, animation: 'spin 4s linear infinite' }}>
+                      ✦
+                    </div>
+                  )}
                 </div>
               ) : (
                 <DndContext
@@ -749,36 +649,38 @@ export default function App() {
           </div>
         </div>
 
-        {modal && (
-          <Modal
-            editing={editing}
-            form={form}
-            setForm={setForm}
-            onSubmit={handleSubmit}
-            onClose={handleCloseModal}
-            selectedDate={selectedDate}
-          />
-        )}
-        {showAI && (
-          <AISuggestPanel
-            dateStr={selectedDate}
-            existingTasks={dayTasks}
-            onAdd={(s) => addTask(selectedDate, s)}
-            onClose={() => setShowAI(false)}
-          />
-        )}
-        {showStats && <Statistics tasks={tasks} onClose={() => setShowStats(false)} />}
-        {confirmDelete && (
-          <ConfirmModal
-            title="Удалить задачу?"
-            message="Это действие нельзя будет отменить."
-            onConfirm={() => {
-              deleteTask(selectedDate, confirmDelete)
-              setConfirmDelete(null)
-            }}
-            onCancel={() => setConfirmDelete(null)}
-          />
-        )}
+        <Suspense fallback={null}>
+          {modal && (
+            <Modal
+              editing={editing}
+              form={form}
+              setForm={setForm}
+              onSubmit={handleSubmit}
+              onClose={handleCloseModal}
+              selectedDate={selectedDate}
+            />
+          )}
+          {showAI && (
+            <AISuggestPanel
+              dateStr={selectedDate}
+              existingTasks={dayTasks}
+              onAdd={(s) => addTask(selectedDate, s)}
+              onClose={() => setShowAI(false)}
+            />
+          )}
+          {showStats && <Statistics tasks={tasks} onClose={() => setShowStats(false)} />}
+          {confirmDelete && (
+            <ConfirmModal
+              title="Удалить задачу?"
+              message="Это действие нельзя будет отменить."
+              onConfirm={() => {
+                deleteTask(selectedDate, confirmDelete)
+                setConfirmDelete(null)
+              }}
+              onCancel={() => setConfirmDelete(null)}
+            />
+          )}
+        </Suspense>
       </div>
     </>
   )

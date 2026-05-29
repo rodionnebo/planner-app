@@ -22,7 +22,7 @@ export default function Auth({ onAuthSuccess }) {
         if (error) throw error
         onAuthSuccess(data.user)
       } else {
-        const { data, error } = await supabase.auth.signUp({
+        const { error } = await supabase.auth.signUp({
           email,
           password,
         })

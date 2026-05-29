@@ -1,5 +1,15 @@
+let cachedToday = null
+let lastUpdate = 0
+
 export function todayStr() {
-  return new Date().toISOString().split('T')[0]
+  const now = Date.now()
+  // Cache for 1 minute
+  if (cachedToday && now - lastUpdate < 60000) {
+    return cachedToday
+  }
+  cachedToday = new Date().toISOString().split('T')[0]
+  lastUpdate = now
+  return cachedToday
 }
 
 export function dateToStr(d) {
@@ -47,7 +57,7 @@ export function parseQuickAdd(text) {
   let priority = 'medium'
 
   // Parse time (e.g. 14:00 or 14-00)
-  const timeMatch = title.match(/\b(\d{1,2}[:\-]\d{2})\b/)
+  const timeMatch = title.match(/\b(\d{1,2}[:-]\d{2})\b/)
   if (timeMatch) {
     time = timeMatch[1].replace('-', ':')
     title = title.replace(timeMatch[0], '')

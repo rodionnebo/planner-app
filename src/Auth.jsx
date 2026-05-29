@@ -187,7 +187,7 @@ export default function Auth({ onAuthSuccess }) {
           <div style={{ height: '1px', background: '#222', margin: '8px 0' }} />
 
           <button
-            onClick={() => onAuthSuccess({ id: 'guest', email: 'guest@example.com' })}
+            onClick={() => onAuthSuccess({ id: 'guest', email: 'guest@example.com', isGuest: true })}
             style={{
               background: 'rgba(232,168,124,0.1)',
               border: '1px solid rgba(232,168,124,0.2)',

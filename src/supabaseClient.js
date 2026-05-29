@@ -7,4 +7,10 @@ if (!supabaseUrl || !supabaseKey) {
   console.warn('Supabase credentials missing. Check your .env file.')
 }
 
-export const supabase = createClient(supabaseUrl || '', supabaseKey || '')
+export const supabase = createClient(supabaseUrl || '', supabaseKey || '', {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+  },
+})

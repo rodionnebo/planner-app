@@ -19,7 +19,7 @@ export function useTasks(user) {
 
   // Sync with Supabase
   useEffect(() => {
-    if (!user) {
+    if (!user || user.isGuest || !user.id) {
       setLoading(false)
       return
     }
@@ -32,6 +32,26 @@ export function useTasks(user) {
         toast.error('Ошибка загрузки задач')
         setLoading(false)
         return
+      }
+
+      if (data.length === 0) {
+        // Check if there are tasks in localStorage that could be recovered
+        const localData = localStorage.getItem('planner_v2')
+        if (localData) {
+          const parsed = JSON.parse(localData)
+          const localTaskCount = Object.values(parsed).flat().length
+          if (localTaskCount > 0) {
+            const recover = window.confirm(
+              `В облаке нет данных, но найдено ${localTaskCount} задач локально. Восстановить их в облако?`
+            )
+            if (recover) {
+              setTasks(parsed)
+              setLoading(false)
+              // This will trigger updateTasks -> saveToSupabase
+              return
+            }
+          }
+        }
       }
 
       const grouped = {}
@@ -47,6 +67,17 @@ export function useTasks(user) {
           createdAt: row.created_at,
         })
       })
+
+      // Emergency backup
+      try {
+        localStorage.setItem(
+          'planner_backup',
+          JSON.stringify({ tasks: grouped, timestamp: new Date().toISOString() })
+        )
+      } catch (e) {
+        console.error('Backup failed', e)
+      }
+
       setTasks(grouped)
       setLoading(false)
     }
@@ -56,7 +87,7 @@ export function useTasks(user) {
 
   const saveToSupabase = useCallback(
     async (newTasks) => {
-      if (!user || user.id === 'guest') return
+      if (!user || user.isGuest || !user.id || user.id === 'guest') return
 
       try {
         const allRows = []
@@ -90,7 +121,7 @@ export function useTasks(user) {
 
   const removeFromSupabase = useCallback(
     async (ids) => {
-      if (!user || user.id === 'guest' || ids.length === 0) return
+      if (!user || user.isGuest || !user.id || user.id === 'guest' || ids.length === 0) return
       try {
         const { error } = await supabase.from('tasks').delete().in('task_id', ids)
         if (error) throw error
@@ -110,12 +141,16 @@ export function useTasks(user) {
       } catch (e) {
         console.error('Failed to save to localStorage', e)
       }
-      saveToSupabase(newTasks)
-      if (idsToDelete.length > 0) {
-        removeFromSupabase(idsToDelete)
+
+      // Only sync to Supabase if not guest
+      if (user && !user.isGuest && user.id && user.id !== 'guest') {
+        saveToSupabase(newTasks)
+        if (idsToDelete.length > 0) {
+          removeFromSupabase(idsToDelete)
+        }
       }
     },
-    [saveToSupabase, removeFromSupabase]
+    [user, saveToSupabase, removeFromSupabase]
   )
 
   const addTask = useCallback(

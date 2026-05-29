@@ -2,26 +2,37 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Toaster } from 'react-hot-toast'
 import { supabase } from './supabaseClient'
 import Auth from './Auth'
-import { useTasks } from './hooks/useTasks'
+import { useTasks } from './hooks/useTasks.jsx'
 import { useCalendar } from './hooks/useCalendar'
 import { TaskCard } from './components/TaskCard'
 import { SidebarContent } from './components/SidebarContent'
 import { Modal } from './components/Modal'
 import { AISuggestPanel } from './components/AISuggestPanel'
+import { Statistics } from './components/Statistics'
 import { EMPTY_FORM, DAYS_FULL, MONTHS_GEN, DAYS_SHORT, PRIORITY_ORDER } from './constants'
-import { todayStr, addDays, strToDate, relLabel } from './utils/date'
+import { todayStr, addDays, strToDate, relLabel, parseQuickAdd } from './utils/date'
 
 export default function App() {
   const [user, setUser] = useState(null)
   const [authLoading, setAuthLoading] = useState(true)
   const [showCal, setShowCal] = useState(false)
   const [showAI, setShowAI] = useState(false)
+  const [showStats, setShowStats] = useState(false)
   const [modal, setModal] = useState(false)
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(EMPTY_FORM)
+  const [searchQuery, setSearchQuery] = useState('')
   const [newTaskId, setNewTaskId] = useState(null)
+  const [today, setToday] = useState(todayStr())
 
-  const today = todayStr()
+  // Dynamic today update
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = todayStr()
+      if (now !== today) setToday(now)
+    }, 60000)
+    return () => clearInterval(timer)
+  }, [today])
 
   // Auth check
   useEffect(() => {
@@ -35,41 +46,49 @@ export default function App() {
       setUser(session?.user ?? null)
     })
     return () => subscription.unsubscribe()
-  }, [])
+  }, [modal, showAI, setSelectedDate, handleCloseModal])
 
-  const { tasks, loading, addTask, editTask, deleteTask, toggleTask, clearCompleted } =
-    useTasks(user)
+  const {
+    tasks,
+    loading,
+    addTask,
+    editTask,
+    deleteTask,
+    toggleTask,
+    moveTask,
+    clearCompleted,
+    getTasksForDate,
+  } = useTasks(user)
 
-  const { selectedDate, setSelectedDate, calMonth, setCalMonth, navigateMonth } = useCalendar()
+  const dayTasks = useMemo(() => getTasksForDate(selectedDate), [getTasksForDate, selectedDate])
 
-  // Keyboard shortcuts
-  useEffect(() => {
-    function onKey(e) {
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
-      if ((e.key === 'n' || e.key === 'N') && !modal && !showAI) {
-        setForm(EMPTY_FORM)
-        setEditing(null)
-        setModal(true)
-      }
-      if (e.key === 'ArrowLeft') setSelectedDate((s) => addDays(s, -1))
-      if (e.key === 'ArrowRight') setSelectedDate((s) => addDays(s, 1))
-      if (e.key === 'Escape') {
-        setModal(false)
-        setShowAI(false)
-        setShowCal(false)
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [modal, showAI, setSelectedDate])
+  const filteredTasks = useMemo(() => {
+    if (!searchQuery.trim()) return dayTasks
 
-  const dayTasks = useMemo(() => tasks[selectedDate] || [], [tasks, selectedDate])
+    // If searching, we look through ALL tasks
+    const results = []
+    const query = searchQuery.toLowerCase()
+
+    Object.entries(tasks).forEach(([date, list]) => {
+      list.forEach((t) => {
+        if (
+          t.title.toLowerCase().includes(query) ||
+          (t.note && t.note.toLowerCase().includes(query))
+        ) {
+          results.push({ ...t, date })
+        }
+      })
+    })
+
+    return results
+  }, [dayTasks, searchQuery, tasks])
+
   const sortedTasks = useMemo(() => {
-    return [...dayTasks].sort((a, b) => {
+    return [...filteredTasks].sort((a, b) => {
       if (a.completed !== b.completed) return a.completed ? 1 : -1
       return PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority]
     })
-  }, [dayTasks])
+  }, [filteredTasks])
 
   const total = dayTasks.length
   const done = dayTasks.filter((t) => t.completed).length
@@ -78,8 +97,13 @@ export default function App() {
   const d = strToDate(selectedDate)
 
   const overdueCount = useMemo(() => {
-    return Object.entries(tasks).filter(([date, list]) => date < today && list.some((t) => !t.completed))
-      .length
+    // Correct count: total number of overdue tasks, not days
+    return Object.entries(tasks).reduce((acc, [date, list]) => {
+      if (date < today) {
+        return acc + list.filter((t) => !t.completed).length
+      }
+      return acc
+    }, 0)
   }, [tasks, today])
 
   const weekDays = useMemo(() => {
@@ -88,15 +112,19 @@ export default function App() {
 
   const handleSubmit = useCallback(() => {
     if (!form.title.trim()) return
+
+    // Quick parse if it's a new task
+    const finalForm = editing ? form : { ...form, ...parseQuickAdd(form.title) }
+
     if (editing) {
-      editTask(selectedDate, editing.id, form)
+      editTask(editing.date, editing.id, finalForm)
     } else {
-      const id = addTask(selectedDate, form)
+      const id = addTask(selectedDate, finalForm)
       setNewTaskId(id)
       setTimeout(() => setNewTaskId(null), 800)
     }
-    setModal(false)
-  }, [form, editing, selectedDate, editTask, addTask])
+    handleCloseModal()
+  }, [form, editing, selectedDate, editTask, addTask, handleCloseModal])
 
   const handleDelete = useCallback(
     (id) => {
@@ -130,7 +158,10 @@ export default function App() {
 
   return (
     <>
-      <Toaster position="bottom-center" toastOptions={{ style: { background: '#111', color: '#fff', border: '1px solid #222' } }} />
+      <Toaster
+        position="bottom-center"
+        toastOptions={{ style: { background: '#111', color: '#fff', border: '1px solid #222' } }}
+      />
       <div
         style={{
           background: 'var(--bg-main)',
@@ -218,6 +249,41 @@ export default function App() {
             >
               📅
             </button>
+            <div style={{ position: 'relative' }}>
+              <input
+                type="text"
+                placeholder="Поиск..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{
+                  background: 'var(--bg-input)',
+                  border: '1px solid #222',
+                  borderRadius: 8,
+                  padding: '5px 10px',
+                  color: 'var(--text-highlight)',
+                  fontSize: 13,
+                  width: 150,
+                  outline: 'none',
+                }}
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  style={{
+                    position: 'absolute',
+                    right: 8,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#555',
+                    cursor: 'pointer',
+                  }}
+                >
+                  ×
+                </button>
+              )}
+            </div>
             <div
               style={{
                 fontSize: 11,
@@ -288,7 +354,9 @@ export default function App() {
           >
             {/* Date header */}
             <div style={{ marginBottom: 20 }}>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap', marginBottom: 3 }}>
+              <div
+                style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap', marginBottom: 3 }}
+              >
                 <h1
                   style={{
                     fontFamily: 'var(--font-serif)',
@@ -331,12 +399,14 @@ export default function App() {
                 )}
               </div>
               <div style={{ fontSize: 12.5, color: 'var(--text-dark)', textTransform: 'capitalize' }}>
-                {DAYS_FULL[d.getDay()]}, {d.getFullYear()} г.
+                {DAYS_FULL[(d.getDay() + 6) % 7]}, {d.getFullYear()} г.
               </div>
             </div>
 
             {/* Week strip */}
-            <div style={{ display: 'flex', gap: 5, marginBottom: 22, overflowX: 'auto', paddingBottom: 2 }}>
+            <div
+              style={{ display: 'flex', gap: 5, marginBottom: 22, overflowX: 'auto', paddingBottom: 2 }}
+            >
               {weekDays.map((ds) => {
                 const dd = strToDate(ds)
                 const isSel = ds === selectedDate
@@ -396,7 +466,16 @@ export default function App() {
             </div>
 
             {/* Toolbar */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, gap: 8, flexWrap: 'wrap' }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: 14,
+                gap: 8,
+                flexWrap: 'wrap',
+              }}
+            >
               <span style={{ fontSize: 12.5, color: 'var(--text-dark)' }}>
                 {total === 0 ? 'Задач нет' : `${total} ${total === 1 ? 'задача' : total < 5 ? 'задачи' : 'задач'}`}
                 {done > 0 && ` · ${done} выполнено`}
@@ -420,6 +499,25 @@ export default function App() {
                     Очистить выполненные
                   </button>
                 )}
+                <button
+                  onClick={() => setShowStats(true)}
+                  style={{
+                    background: 'transparent',
+                    color: 'var(--text-dim)',
+                    border: '1px solid #242424',
+                    borderRadius: 20,
+                    padding: '5px 13px',
+                    fontSize: 12,
+                    cursor: 'pointer',
+                    fontFamily: 'var(--font-main)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 5,
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  📊 Статистика
+                </button>
                 <button
                   onClick={() => setShowAI(true)}
                   style={{
@@ -484,6 +582,7 @@ export default function App() {
                     task={task}
                     isNew={task.id === newTaskId}
                     onToggle={() => toggleTask(selectedDate, task.id)}
+                    onMove={(newDate) => moveTask(selectedDate, newDate, task.id)}
                     onEdit={() => {
                       setForm({
                         title: task.title,
@@ -491,7 +590,7 @@ export default function App() {
                         time: task.time || '',
                         priority: task.priority,
                       })
-                      setEditing(task)
+                      setEditing({ ...task, date: selectedDate })
                       setModal(true)
                     }}
                     onDelete={() => handleDelete(task.id)}
@@ -541,7 +640,7 @@ export default function App() {
             form={form}
             setForm={setForm}
             onSubmit={handleSubmit}
-            onClose={() => setModal(false)}
+            onClose={handleCloseModal}
             selectedDate={selectedDate}
           />
         )}
@@ -553,6 +652,7 @@ export default function App() {
             onClose={() => setShowAI(false)}
           />
         )}
+        {showStats && <Statistics tasks={tasks} onClose={() => setShowStats(false)} />}
       </div>
     </>
   )

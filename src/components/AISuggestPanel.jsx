@@ -2,36 +2,63 @@ import React, { useState, useEffect } from 'react'
 import { PRIORITY } from '../constants'
 
 async function fetchAISuggestions(dateStr, existingTasks) {
-  // Симуляция "размышлений" ИИ
+  // Check for Anthropic API Key in window/env
+  const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY
+
+  if (apiKey) {
+    try {
+      const prompt = `You are a productivity assistant. Current date is ${dateStr}.
+      User has these tasks today: ${existingTasks.map((t) => t.title).join(', ')}.
+      Suggest 4 new distinct, concise, helpful tasks for today in Russian.
+      Return ONLY a JSON array of objects with keys: title, priority (low, medium, high), note.`
+
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'dangerously-allow-browser': 'true',
+        },
+        body: JSON.stringify({
+          model: 'claude-3-haiku-20240307',
+          max_tokens: 1024,
+          messages: [{ role: 'user', content: prompt }],
+        }),
+      })
+
+      const data = await response.json()
+      const content = data.content[0].text
+      return JSON.parse(content)
+    } catch (e) {
+      console.error('AI API failed, falling back to mock', e)
+    }
+  }
+
+  // Improved Pseudo-AI (Context-aware Mock)
   await new Promise((r) => setTimeout(r, 1500))
 
-  const suggestions = [
-    {
-      title: 'Прогулка на свежем воздухе 🌿',
-      priority: 'medium',
-      note: 'Минимум 30 минут для ясности ума.',
-    },
-    {
-      title: 'Заняться самообразованием 📚',
-      priority: 'high',
-      note: 'Прочитать главу книги или посмотреть урок.',
-    },
-    {
-      title: 'Планирование следующей недели 🗓️',
-      priority: 'medium',
-      note: 'Записать ключевые цели и встречи.',
-    },
-    { title: 'Вечерний детокс 📵', priority: 'low', note: 'Без гаджетов за час до сна.' },
-    { title: 'Сделать зарядку 🤸', priority: 'high', note: 'Разминка на 10-15 минут.' },
-    {
-      title: 'Уборка рабочего места ✨',
-      priority: 'medium',
-      note: 'Чистота вокруг — чистота в мыслях.',
-    },
-  ]
+  const categories = {
+    health: [
+      { title: 'Выпить стакан воды 💧', priority: 'low', note: 'Гидратация важна для фокуса.' },
+      { title: 'Разминка шеи и спины 🧘', priority: 'medium', note: 'Снять напряжение после работы.' },
+      { title: 'Вечерняя прогулка 🚶', priority: 'medium', note: '30 минут на свежем воздухе.' },
+    ],
+    growth: [
+      { title: 'Прочитать 10 страниц 📖', priority: 'high', note: 'Саморазвитие каждый день.' },
+      { title: 'Урок иностранного языка 🗣️', priority: 'high', note: '15 минут в Duolingo или аналоги.' },
+      { title: 'Прослушать подкаст 🎧', priority: 'medium', note: 'Узнать что-то новое в своей сфере.' },
+    ],
+    home: [
+      { title: 'Уборка рабочего стола ✨', priority: 'medium', note: 'Порядок в пространстве — порядок в голове.' },
+      { title: 'Планирование меню 🍎', priority: 'low', note: 'Записать идеи для ужина на неделю.' },
+    ],
+  }
 
   const existingTitles = new Set(existingTasks.map((t) => t.title))
-  return suggestions
+  const allSuggestions = [...categories.health, ...categories.growth, ...categories.home]
+
+  return allSuggestions
     .filter((s) => !existingTitles.has(s.title))
     .sort(() => 0.5 - Math.random())
     .slice(0, 4)

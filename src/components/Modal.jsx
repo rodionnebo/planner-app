@@ -1,10 +1,12 @@
 import React, { useEffect, useRef } from 'react'
 import { strToDate } from '../utils/date'
-import { MONTHS_GEN, PRIORITY } from '../constants'
+import { MONTHS_GEN, PRIORITY, REPEAT_OPTIONS } from '../constants'
 
 export const Modal = ({ editing, form, setForm, onSubmit, onClose, selectedDate }) => {
   const d = strToDate(selectedDate)
-  const title = editing ? 'Редактировать задачу' : `Задача на ${d.getDate()} ${MONTHS_GEN[d.getMonth()]}`
+  const title = editing
+    ? 'Редактировать задачу'
+    : `Задача на ${d.getDate()} ${MONTHS_GEN[d.getMonth()]}`
   const inputRef = useRef(null)
 
   useEffect(() => {
@@ -119,14 +121,30 @@ export const Modal = ({ editing, form, setForm, onSubmit, onClose, selectedDate 
           style={{ ...inputSt, resize: 'vertical', minHeight: 76 }}
         />
 
-        <div style={{ marginBottom: 14 }}>
-          <div style={labelSt}>Время</div>
-          <input
-            type="time"
-            value={form.time}
-            onChange={(e) => setForm({ ...form, time: e.target.value })}
-            style={{ ...inputSt, marginBottom: 0, width: 'auto' }}
-          />
+        <div style={{ display: 'flex', gap: 15, marginBottom: 14 }}>
+          <div style={{ flex: 1 }}>
+            <div style={labelSt}>Время</div>
+            <input
+              type="time"
+              value={form.time}
+              onChange={(e) => setForm({ ...form, time: e.target.value })}
+              style={{ ...inputSt, marginBottom: 0 }}
+            />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={labelSt}>Повтор</div>
+            <select
+              value={form.repeat}
+              onChange={(e) => setForm({ ...form, repeat: e.target.value })}
+              style={{ ...inputSt, marginBottom: 0, height: 42 }}
+            >
+              {REPEAT_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <div style={{ marginBottom: 22 }}>

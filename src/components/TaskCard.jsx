@@ -1,8 +1,10 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { PRIORITY } from '../constants'
 
-export const TaskCard = React.memo(({ task, onToggle, onEdit, onDelete, isNew }) => {
+export const TaskCard = React.memo(({ task, onToggle, onEdit, onDelete, onMove, isNew }) => {
+  const [showMove, setShowMove] = useState(false)
   const p = PRIORITY[task.priority]
+
   return (
     <div
       className={`task-card${isNew ? ' task-new' : ''}`}
@@ -106,9 +108,45 @@ export const TaskCard = React.memo(({ task, onToggle, onEdit, onDelete, isNew })
             {task.note}
           </div>
         )}
+
+        {showMove && (
+          <div style={{ marginTop: 10, display: 'flex', gap: 6, alignItems: 'center' }}>
+            <input
+              type="date"
+              onChange={(e) => {
+                if (e.target.value) {
+                  onMove(e.target.value)
+                  setShowMove(false)
+                }
+              }}
+              style={{
+                background: '#0c0c0c',
+                border: '1px solid #222',
+                borderRadius: 6,
+                color: '#fff',
+                fontSize: 11,
+                padding: '4px 6px',
+              }}
+            />
+            <button
+              onClick={() => setShowMove(false)}
+              style={{ background: 'transparent', border: 'none', color: '#555', fontSize: 11, cursor: 'pointer' }}
+            >
+              Отмена
+            </button>
+          </div>
+        )}
       </div>
 
       <div style={{ display: 'flex', gap: 1, flexShrink: 0 }}>
+        <button
+          onClick={() => setShowMove(!showMove)}
+          className="act-btn"
+          title="Перенести"
+          aria-label="Перенести"
+        >
+          📅
+        </button>
         <button onClick={onEdit} className="act-btn" title="Редактировать" aria-label="Редактировать">
           ✏️
         </button>

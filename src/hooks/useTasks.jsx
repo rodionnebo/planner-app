@@ -1,11 +1,12 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../supabaseClient'
-import { generateId } from '../utils/date'
+import { generateId, strToDate, dateToStr, addDays } from '../utils/date'
 import toast from 'react-hot-toast'
 
 export function useTasks(user) {
   const [tasks, setTasks] = useState({})
   const [loading, setLoading] = useState(true)
+  const undoTimeoutRef = useRef(null)
 
   // Load from localStorage initially
   useEffect(() => {
@@ -35,7 +36,6 @@ export function useTasks(user) {
       }
 
       if (data.length === 0) {
-        // Check if there are tasks in localStorage that could be recovered
         const localData = localStorage.getItem('planner_v2')
         if (localData) {
           const parsed = JSON.parse(localData)
@@ -47,7 +47,6 @@ export function useTasks(user) {
             if (recover) {
               setTasks(parsed)
               setLoading(false)
-              // This will trigger updateTasks -> saveToSupabase
               return
             }
           }
@@ -65,10 +64,10 @@ export function useTasks(user) {
           priority: row.priority,
           completed: row.completed,
           createdAt: row.created_at,
+          repeat: row.repeat || 'none',
         })
       })
 
-      // Emergency backup
       try {
         localStorage.setItem(
           'planner_backup',
@@ -103,6 +102,7 @@ export function useTasks(user) {
               priority: t.priority,
               completed: t.completed,
               created_at: t.createdAt || new Date().toISOString(),
+              repeat: t.repeat || 'none',
             })
           })
         })
@@ -142,7 +142,6 @@ export function useTasks(user) {
         console.error('Failed to save to localStorage', e)
       }
 
-      // Only sync to Supabase if not guest
       if (user && !user.isGuest && user.id && user.id !== 'guest') {
         saveToSupabase(newTasks)
         if (idsToDelete.length > 0) {
@@ -206,16 +205,118 @@ export function useTasks(user) {
     [tasks, updateTasks]
   )
 
-  const clearCompleted = useCallback(
-    (date) => {
+  const moveTask = useCallback(
+    (oldDate, newDate, id) => {
       const newTasks = { ...tasks }
-      if (newTasks[date]) {
-        const idsToDelete = newTasks[date].filter((t) => t.completed).map((t) => t.id)
-        newTasks[date] = newTasks[date].filter((t) => !t.completed)
-        updateTasks(newTasks, idsToDelete)
+      const task = newTasks[oldDate]?.find((t) => t.id === id)
+      if (task) {
+        newTasks[oldDate] = newTasks[oldDate].filter((t) => t.id !== id)
+        newTasks[newDate] = [...(newTasks[newDate] || []), { ...task }]
+        updateTasks(newTasks)
       }
     },
     [tasks, updateTasks]
+  )
+
+  const clearCompleted = useCallback(
+    (date) => {
+      const oldTasks = { ...tasks }
+      const newTasks = { ...tasks }
+      if (newTasks[date]) {
+        const completedTasks = newTasks[date].filter((t) => t.completed)
+        const idsToDelete = completedTasks.map((t) => t.id)
+
+        if (idsToDelete.length === 0) return
+
+        newTasks[date] = newTasks[date].filter((t) => !t.completed)
+
+        setTasks(newTasks)
+
+        const handleUndo = () => {
+          if (undoTimeoutRef.current) {
+            clearTimeout(undoTimeoutRef.current)
+            undoTimeoutRef.current = null
+          }
+          setTasks(oldTasks)
+          toast.success('Удаление отменено')
+        }
+
+        toast(
+          (t) => (
+            <span>
+              Удалено задач: {idsToDelete.length}{' '}
+              <button
+                onClick={() => {
+                  handleUndo()
+                  toast.dismiss(t.id)
+                }}
+                style={{
+                  background: 'var(--accent-muted)',
+                  color: 'var(--accent)',
+                  border: 'none',
+                  borderRadius: 4,
+                  padding: '2px 8px',
+                  marginLeft: 10,
+                  cursor: 'pointer',
+                }}
+              >
+                Отменить
+              </button>
+            </span>
+          ),
+          { duration: 5000 }
+        )
+
+        undoTimeoutRef.current = setTimeout(() => {
+          updateTasks(newTasks, idsToDelete)
+          undoTimeoutRef.current = null
+        }, 5000)
+      }
+    },
+    [tasks, updateTasks]
+  )
+
+  // Recurring tasks generator
+  const getTasksForDate = useCallback(
+    (dateStr) => {
+      const dayTasks = tasks[dateStr] || []
+      const recurringTasks = []
+
+      // This is a simple implementation of recurring tasks
+      // In a real app, you would want to calculate this more efficiently
+      Object.entries(tasks).forEach(([d, list]) => {
+        if (d >= dateStr) return // Only check past tasks for recurrence
+        list.forEach((t) => {
+          if (t.repeat === 'none') return
+
+          const taskDate = strToDate(d)
+          const targetDate = strToDate(dateStr)
+          const diffDays = Math.floor((targetDate - taskDate) / (1000 * 60 * 60 * 24))
+
+          if (diffDays <= 0) return
+
+          let isMatch = false
+          if (t.repeat === 'daily') isMatch = true
+          if (t.repeat === 'weekly' && diffDays % 7 === 0) isMatch = true
+
+          if (isMatch) {
+            // Check if this instance already exists or is completed on target date
+            const alreadyExists = dayTasks.some((dt) => dt.title === t.title)
+            if (!alreadyExists) {
+              recurringTasks.push({
+                ...t,
+                id: `rec-${t.id}-${dateStr}`,
+                isRecurringInstance: true,
+                originalId: t.id,
+              })
+            }
+          }
+        })
+      })
+
+      return [...dayTasks, ...recurringTasks]
+    },
+    [tasks]
   )
 
   return {
@@ -225,6 +326,8 @@ export function useTasks(user) {
     editTask,
     deleteTask,
     toggleTask,
+    moveTask,
     clearCompleted,
+    getTasksForDate,
   }
 }

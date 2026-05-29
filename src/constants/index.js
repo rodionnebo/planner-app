@@ -57,13 +57,19 @@ export const MONTHS_GEN = [
 ]
 export const DAYS_SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
 export const DAYS_FULL = [
-  'воскресенье',
   'понедельник',
   'вторник',
   'среда',
   'четверг',
   'пятница',
   'суббота',
+  'воскресенье',
 ]
 
-export const EMPTY_FORM = { title: '', note: '', time: '', priority: 'medium' }
+export const REPEAT_OPTIONS = [
+  { value: 'none', label: 'Не повторять' },
+  { value: 'daily', label: 'Каждый день' },
+  { value: 'weekly', label: 'Каждую неделю' },
+]
+
+export const EMPTY_FORM = { title: '', note: '', time: '', priority: 'medium', repeat: 'none' }

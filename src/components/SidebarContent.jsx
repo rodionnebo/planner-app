@@ -208,7 +208,7 @@ export const SidebarContent = ({
                      localStorage.setItem('planner_v2', JSON.stringify(data));
                      window.location.reload();
                    }
-                 } catch (err) {
+               } catch {
                    toast.error('Ошибка импорта');
                  }
                }}

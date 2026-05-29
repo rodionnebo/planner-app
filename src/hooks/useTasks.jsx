@@ -400,7 +400,7 @@ export function useTasks(user) {
         return next
       })
     },
-    [getTasksForDate, updateLocalAndCloud]
+    [getTasksForDate, updateLocalAndCloud, addTask]
   )
 
   const clearCompleted = useCallback(

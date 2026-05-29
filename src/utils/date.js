@@ -7,13 +7,21 @@ export function todayStr() {
   if (cachedToday && now - lastUpdate < 60000) {
     return cachedToday
   }
-  cachedToday = new Date().toISOString().split('T')[0]
+  // Use local time instead of UTC to avoid date shifting
+  const d = new Date()
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  cachedToday = `${year}-${month}-${day}`
   lastUpdate = now
   return cachedToday
 }
 
 export function dateToStr(d) {
-  return d.toISOString().split('T')[0]
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
 export function strToDate(s) {

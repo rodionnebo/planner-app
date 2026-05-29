@@ -1,7 +1,7 @@
 import { useState, memo } from 'react'
 import confetti from 'canvas-confetti'
 
-export const TaskCard = memo(({ task, onToggle, onEdit, onDelete, onMove, isNew }) => {
+const TaskCardComponent = ({ task, onToggle, onEdit, onDelete, onMove, isNew }) => {
   const [showMenu, setShowMenu] = useState(false)
   const [isNoteExpanded, setIsNoteExpanded] = useState(false)
 
@@ -52,8 +52,9 @@ export const TaskCard = memo(({ task, onToggle, onEdit, onDelete, onMove, isNew 
             <span className="task-emoji">{task.emoji || '📌'}</span>
             <span className="task-title" style={{
               fontSize: 15,
-              color: task.completed ? 'var(--text-dim)' : 'var(--text-highlight)',
-              textDecoration: task.completed ? 'line-through' : 'none'
+              color: task.completed ? 'var(--text-dark)' : 'var(--text-highlight)',
+              textDecoration: task.completed ? 'line-through' : 'none',
+              opacity: task.completed ? 0.7 : 1
             }}>
               {task.title}
             </span>
@@ -154,6 +155,7 @@ export const TaskCard = memo(({ task, onToggle, onEdit, onDelete, onMove, isNew 
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
+                    // eslint-disable-next-line no-unused-vars
                     const { id, ...data } = task;
                     onMove(undefined, data);
                     setShowMenu(false);
@@ -175,4 +177,7 @@ export const TaskCard = memo(({ task, onToggle, onEdit, onDelete, onMove, isNew 
       </div>
     </div>
   )
-})
+}
+
+TaskCardComponent.displayName = 'TaskCard'
+export const TaskCard = memo(TaskCardComponent)

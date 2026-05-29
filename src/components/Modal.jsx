@@ -3,6 +3,7 @@ import { useRef, useEffect, useState } from 'react'
 export const Modal = ({ editing, form, setForm, onSubmit, onClose }) => {
   const inputRef = useRef(null)
   const [tagInput, setTagInput] = useState('')
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false)
 
   useEffect(() => {
     if (inputRef.current) inputRef.current.focus()
@@ -17,6 +18,14 @@ export const Modal = ({ editing, form, setForm, onSubmit, onClose }) => {
 
   const removeTag = (tag) => {
     setForm({ ...form, tags: form.tags.filter(t => t !== tag) })
+  }
+
+  const handleSave = () => {
+    if (!form.title.trim()) {
+      setAttemptedSubmit(true)
+      return
+    }
+    onSubmit()
   }
 
   return (
@@ -38,11 +47,22 @@ export const Modal = ({ editing, form, setForm, onSubmit, onClose }) => {
             <input
               ref={inputRef}
               type="text"
-              placeholder="Название задачи..."
+              placeholder={attemptedSubmit ? 'Название обязательно!' : 'Название задачи...'}
               value={form.title}
-              onChange={(e) => setForm({ ...form, title: e.target.value })}
-              onKeyDown={(e) => e.key === 'Enter' && onSubmit()}
-              style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 12, padding: '12px 14px', color: '#fff' }}
+              onChange={(e) => {
+                setForm({ ...form, title: e.target.value })
+                if (e.target.value.trim()) setAttemptedSubmit(false)
+              }}
+              onKeyDown={(e) => e.key === 'Enter' && handleSave()}
+              style={{
+                width: '100%',
+                background: 'var(--bg-input)',
+                border: attemptedSubmit ? '1px solid var(--error)' : '1px solid var(--border)',
+                borderRadius: 12,
+                padding: '12px 14px',
+                color: '#fff',
+                transition: 'border 0.2s'
+              }}
             />
           </div>
 
@@ -106,7 +126,21 @@ export const Modal = ({ editing, form, setForm, onSubmit, onClose }) => {
 
         <div className="modal-footer" style={{ display: 'flex', gap: 12, marginTop: 24 }}>
           <button className="cancel-btn" onClick={onClose} style={{ flex: 1, padding: '14px', borderRadius: 14, background: 'none', border: '1px solid var(--border)', color: 'var(--text-dim)', cursor: 'pointer', fontWeight: 600 }}>Отмена</button>
-          <button className="save-btn" onClick={onSubmit} style={{ flex: 2, padding: '14px', borderRadius: 14, background: 'var(--accent)', border: 'none', color: '#0C0C0C', cursor: 'pointer', fontWeight: 700 }}>
+          <button
+            className="save-btn"
+            onClick={handleSave}
+            style={{
+              flex: 2,
+              padding: '14px',
+              borderRadius: 14,
+              background: 'var(--accent)',
+              border: 'none',
+              color: '#0C0C0C',
+              cursor: 'pointer',
+              fontWeight: 700,
+              opacity: !form.title.trim() && attemptedSubmit ? 0.6 : 1
+            }}
+          >
             {editing ? 'Сохранить изменения' : 'Добавить задачу'}
           </button>
         </div>

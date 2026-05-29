@@ -80,9 +80,10 @@ export default function App() {
 
   useEffect(() => {
     const timer = setInterval(() => {
+      // Clear today cache to get fresh date
       const now = todayStr()
       if (now !== today) setToday(now)
-    }, 60000)
+    }, 10000)
     return () => clearInterval(timer)
   }, [today])
 
@@ -135,6 +136,17 @@ export default function App() {
 
   useEffect(() => {
     function onKey(e) {
+      // If modal is open, don't handle shortcuts here to avoid conflicts
+      if (modal) {
+        if (e.key === 'Escape') {
+          // Modal has its own escape handler if focus is inside,
+          // but we can have it here if we want a global safety net.
+          // However, point 87 warns about double call.
+          return;
+        }
+        return;
+      }
+
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
       if ((e.key === 'n' || e.key === 'N') && !modal && !showAI) {
         setForm(EMPTY_FORM)
@@ -145,7 +157,6 @@ export default function App() {
       if (e.key === 'ArrowRight') setSelectedDate((s) => addDays(s, 1))
       if (e.key === 'f' || e.key === 'F') setIsFocusMode(v => !v)
       if (e.key === 'Escape') {
-        handleCloseModal()
         setShowAI(false)
         setShowCal(false)
       }

@@ -248,6 +248,13 @@ export function useTasks(user) {
 
   const addTask = useCallback(
     (date, taskData) => {
+      // Limit to 1000 tasks per user to prevent abuse (Point 95)
+      const totalTasksCount = Object.values(tasks).reduce((acc, list) => acc + list.length, 0)
+      if (totalTasksCount >= 1000) {
+        toast.error('Достигнут лимит в 1000 задач. Пожалуйста, удалите старые задачи.')
+        return null
+      }
+
       const newId = generateId()
       const newTask = {
         id: newId,
@@ -263,7 +270,7 @@ export function useTasks(user) {
       })
       return newId
     },
-    [updateLocalAndCloud]
+    [updateLocalAndCloud, tasks]
   )
 
   const editTask = useCallback(

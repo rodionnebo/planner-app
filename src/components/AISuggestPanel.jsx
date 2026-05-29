@@ -7,8 +7,6 @@ export const AISuggestPanel = ({ dateStr, existingTasks, onAdd, onClose }) => {
   const [thinking, setThinking] = useState(false)
   const [error, setError] = useState(null)
 
-  const existingCount = existingTasks.length
-
   useEffect(() => {
     const fetchSuggestions = async () => {
       setThinking(true)
@@ -24,9 +22,7 @@ export const AISuggestPanel = ({ dateStr, existingTasks, onAdd, onClose }) => {
       }
     }
     fetchSuggestions()
-    // existingCount is used to re-trigger when task list size changes
-    // without causing infinite loop due to array reference
-  }, [dateStr, existingCount, existingTasks])
+  }, [dateStr, existingTasks])
 
   return (
     <div className="ai-panel">

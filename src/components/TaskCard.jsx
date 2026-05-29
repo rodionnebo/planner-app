@@ -52,9 +52,8 @@ const TaskCardComponent = ({ task, onToggle, onEdit, onDelete, onMove, isNew }) 
             <span className="task-emoji">{task.emoji || '📌'}</span>
             <span className="task-title" style={{
               fontSize: 15,
-              color: task.completed ? 'var(--text-dark)' : 'var(--text-highlight)',
-              textDecoration: task.completed ? 'line-through' : 'none',
-              opacity: task.completed ? 0.7 : 1
+              color: task.completed ? 'var(--text-dim)' : 'var(--text-highlight)',
+              textDecoration: task.completed ? 'line-through' : 'none'
             }}>
               {task.title}
             </span>

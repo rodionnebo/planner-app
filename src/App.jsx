@@ -80,10 +80,9 @@ export default function App() {
 
   useEffect(() => {
     const timer = setInterval(() => {
-      // Clear today cache to get fresh date
       const now = todayStr()
       if (now !== today) setToday(now)
-    }, 10000)
+    }, 60000)
     return () => clearInterval(timer)
   }, [today])
 
@@ -136,17 +135,6 @@ export default function App() {
 
   useEffect(() => {
     function onKey(e) {
-      // If modal is open, don't handle shortcuts here to avoid conflicts
-      if (modal) {
-        if (e.key === 'Escape') {
-          // Modal has its own escape handler if focus is inside,
-          // but we can have it here if we want a global safety net.
-          // However, point 87 warns about double call.
-          return;
-        }
-        return;
-      }
-
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
       if ((e.key === 'n' || e.key === 'N') && !modal && !showAI) {
         setForm(EMPTY_FORM)
@@ -157,6 +145,7 @@ export default function App() {
       if (e.key === 'ArrowRight') setSelectedDate((s) => addDays(s, 1))
       if (e.key === 'f' || e.key === 'F') setIsFocusMode(v => !v)
       if (e.key === 'Escape') {
+        handleCloseModal()
         setShowAI(false)
         setShowCal(false)
       }
@@ -244,6 +233,16 @@ export default function App() {
     const mainArea = document.querySelector('.main-area')
     if (mainArea) mainArea.scrollTop = 0
   }, [selectedDate])
+
+  // Dynamic Title (Point 96)
+  useEffect(() => {
+    const todayTasksCount = (tasks[todayStr()] || []).filter(t => !t.completed).length
+    if (todayTasksCount > 0) {
+      document.title = `Планер · ${todayTasksCount} ${todayTasksCount === 1 ? 'задача' : todayTasksCount < 5 ? 'задачи' : 'задач'} на сегодня`
+    } else {
+      document.title = 'Планер ✦'
+    }
+  }, [tasks])
 
   const handleSubmit = useCallback(() => {
     if (!form.title.trim()) return
@@ -334,7 +333,9 @@ export default function App() {
             <span style={{ fontSize: 18 }}>✦</span>
             <span style={{ fontFamily: 'var(--font-serif)', fontSize: 21, fontWeight: 700, color: 'var(--accent)', letterSpacing: 0.3 }}>Планер</span>
             {streak > 0 && <span style={{ fontSize: 13, marginLeft: 8 }} title="Дней подряд!">🔥 {streak}</span>}
-            {syncing && <span style={{ fontSize: 12, marginLeft: 8, opacity: 0.5, animation: 'spin 2s linear infinite' }} title="Синхронизация...">☁️</span>}
+            <div aria-live="polite" style={{ display: 'inline-flex', alignItems: 'center' }}>
+              {syncing && <span style={{ fontSize: 12, marginLeft: 8, opacity: 0.5, animation: 'spin 2s linear infinite' }} title="Синхронизация...">☁️</span>}
+            </div>
             <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} style={{ background: 'transparent', border: 'none', fontSize: 18, cursor: 'pointer', marginLeft: 5 }} title="Переключить тему">
               {theme === 'dark' ? '🌙' : '☀️'}
             </button>

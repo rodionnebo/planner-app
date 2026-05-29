@@ -76,15 +76,9 @@ export function useTasks(user) {
           })
         })
 
-        // Optimized sync: delete and re-insert as before but with better error handling
-        // A better way would be using upsert, but it requires a unique constraint on (user_id, task_id)
-        // For now, let's keep the logic but wrap in toast feedback
-        const { error: deleteError } = await supabase.from('tasks').delete().eq('user_id', user.id)
-        if (deleteError) throw deleteError
-
         if (allRows.length > 0) {
-          const { error: insertError } = await supabase.from('tasks').insert(allRows)
-          if (insertError) throw insertError
+          const { error } = await supabase.from('tasks').upsert(allRows, { onConflict: 'task_id' })
+          if (error) throw error
         }
       } catch (e) {
         console.error('Sync failed', e)
@@ -94,8 +88,22 @@ export function useTasks(user) {
     [user]
   )
 
+  const removeFromSupabase = useCallback(
+    async (ids) => {
+      if (!user || user.id === 'guest' || ids.length === 0) return
+      try {
+        const { error } = await supabase.from('tasks').delete().in('task_id', ids)
+        if (error) throw error
+      } catch (e) {
+        console.error('Delete failed', e)
+        toast.error('Ошибка удаления из облака')
+      }
+    },
+    [user]
+  )
+
   const updateTasks = useCallback(
-    (newTasks) => {
+    (newTasks, idsToDelete = []) => {
       setTasks(newTasks)
       try {
         localStorage.setItem('planner_v2', JSON.stringify(newTasks))
@@ -103,8 +111,11 @@ export function useTasks(user) {
         console.error('Failed to save to localStorage', e)
       }
       saveToSupabase(newTasks)
+      if (idsToDelete.length > 0) {
+        removeFromSupabase(idsToDelete)
+      }
     },
-    [saveToSupabase]
+    [saveToSupabase, removeFromSupabase]
   )
 
   const addTask = useCallback(
@@ -141,7 +152,7 @@ export function useTasks(user) {
       const newTasks = { ...tasks }
       if (newTasks[date]) {
         newTasks[date] = newTasks[date].filter((t) => t.id !== id)
-        updateTasks(newTasks)
+        updateTasks(newTasks, [id])
       }
     },
     [tasks, updateTasks]
@@ -164,8 +175,9 @@ export function useTasks(user) {
     (date) => {
       const newTasks = { ...tasks }
       if (newTasks[date]) {
+        const idsToDelete = newTasks[date].filter((t) => t.completed).map((t) => t.id)
         newTasks[date] = newTasks[date].filter((t) => !t.completed)
-        updateTasks(newTasks)
+        updateTasks(newTasks, idsToDelete)
       }
     },
     [tasks, updateTasks]

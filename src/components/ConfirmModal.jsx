@@ -1,5 +1,5 @@
 
-export const ConfirmModal = ({ title, message, onConfirm, onCancel }) => {
+export const ConfirmModal = ({ title, message, onConfirm, onCancel, confirmText = 'Удалить', isDanger = true }) => {
   return (
     <div
       style={{
@@ -61,7 +61,7 @@ export const ConfirmModal = ({ title, message, onConfirm, onCancel }) => {
               flex: 1,
               padding: '12px',
               borderRadius: 12,
-              background: 'var(--error)',
+              background: isDanger ? 'var(--error)' : 'var(--accent)',
               border: 'none',
               color: '#000',
               fontWeight: 600,
@@ -70,7 +70,7 @@ export const ConfirmModal = ({ title, message, onConfirm, onCancel }) => {
               fontSize: 14,
             }}
           >
-            Удалить
+            {confirmText}
           </button>
         </div>
       </div>

@@ -1,9 +1,11 @@
 import { MONTHS_GEN, DAYS_FULL } from '../constants'
+import { relLabel } from '../utils/date'
 
 export const DayHeader = ({ date, today, dayTasks }) => {
-  const d = new Date(date)
+  const [y, m, day] = date.split('-').map(Number)
+  const d = new Date(y, m - 1, day)
   const isPast = date < today
-  const rel = date === today ? 'Сегодня' : '' // simplified for now
+  const rel = relLabel(date)
 
   return (
     <div style={{ marginBottom: 20 }}>

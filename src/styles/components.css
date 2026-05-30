@@ -151,6 +151,12 @@ select:focus {
   padding-top: 40px !important;
 }
 
+@media (max-width: 768px) {
+  .user-email-header {
+    display: none !important;
+  }
+}
+
 @media (max-width: 680px) {
   .layout {
     flex-direction: column !important;

@@ -25,7 +25,17 @@ export const AISuggestPanel = ({ dateStr, existingTasks, onAdd, onClose }) => {
   }, [dateStr, existingTasks])
 
   return (
-    <div className="ai-panel">
+    <div
+      className="ai-panel"
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 300,
+        background: 'var(--bg-main)',
+        display: 'flex',
+        flexDirection: 'column'
+      }}
+    >
       <div className="ai-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span className="ai-icon">✨</span>

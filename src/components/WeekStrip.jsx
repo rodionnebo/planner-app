@@ -4,8 +4,8 @@ import { DAYS_SHORT } from '../constants'
 
 export const WeekStrip = ({ selectedDate, today, tasks, setSelectedDate }) => {
   const weekDays = useMemo(() => {
-    return Array.from({ length: 7 }, (_, i) => addDays(selectedDate, -3 + i))
-  }, [selectedDate])
+    return Array.from({ length: 7 }, (_, i) => addDays(today, -3 + i))
+  }, [today])
 
   return (
     <div

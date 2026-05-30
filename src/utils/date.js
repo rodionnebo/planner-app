@@ -3,17 +3,17 @@ let lastUpdate = 0
 
 export function todayStr() {
   const now = Date.now()
-  // Cache for 1 minute
-  if (cachedToday && now - lastUpdate < 60000) {
+  // Cache for 10 seconds
+  if (cachedToday && now - lastUpdate < 10000) {
     return cachedToday
   }
-  cachedToday = new Date().toISOString().split('T')[0]
+  cachedToday = new Date().toLocaleDateString('en-CA')
   lastUpdate = now
   return cachedToday
 }
 
 export function dateToStr(d) {
-  return d.toISOString().split('T')[0]
+  return d.toLocaleDateString('en-CA')
 }
 
 export function strToDate(s) {

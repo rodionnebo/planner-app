@@ -44,9 +44,9 @@ export const Toolbar = ({
         <button
           onClick={() => setShowStats(true)}
           style={{
-            background: 'transparent',
-            color: 'var(--text-dim)',
-            border: '1px solid #242424',
+            background: 'rgba(109,191,126,0.08)',
+            color: 'var(--success)',
+            border: '1px solid rgba(109,191,126,0.2)',
             borderRadius: 20,
             padding: '5px 13px',
             fontSize: 12,

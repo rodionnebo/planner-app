@@ -126,11 +126,12 @@ export default function App() {
     setForm(EMPTY_FORM)
   }, [])
 
+  const [showConfirmLogout, setShowConfirmLogout] = useState(false)
+
   const handleSignOut = async () => {
-    if (window.confirm('Вы уверены, что хотите выйти?')) {
-      await supabase.auth.signOut()
-      setUser(null)
-    }
+    await supabase.auth.signOut()
+    setUser(null)
+    setShowConfirmLogout(false)
   }
 
   useEffect(() => {
@@ -320,6 +321,8 @@ export default function App() {
             position: 'sticky',
             top: 0,
             zIndex: 10,
+            gap: 12,
+            flexWrap: 'wrap'
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
@@ -332,29 +335,35 @@ export default function App() {
             </button>
             <span style={{ fontSize: 18 }}>✦</span>
             <span style={{ fontFamily: 'var(--font-serif)', fontSize: 21, fontWeight: 700, color: 'var(--accent)', letterSpacing: 0.3 }}>Планер</span>
-            {streak > 0 && <span style={{ fontSize: 13, marginLeft: 8 }} title="Дней подряд!">🔥 {streak}</span>}
+            {streak > 0 && <span style={{ fontSize: 13, marginLeft: 2 }} title="Дней подряд!">🔥 {streak}</span>}
             <div aria-live="polite" style={{ display: 'inline-flex', alignItems: 'center' }}>
-              {syncing && <span style={{ fontSize: 12, marginLeft: 8, opacity: 0.5, animation: 'spin 2s linear infinite' }} title="Синхронизация...">☁️</span>}
+              {syncing && <span style={{ fontSize: 12, marginLeft: 4, opacity: 0.5, animation: 'spin 2s linear infinite' }} title="Синхронизация...">☁️</span>}
             </div>
-            <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} style={{ background: 'transparent', border: 'none', fontSize: 18, cursor: 'pointer', marginLeft: 5 }} title="Переключить тему">
-              {theme === 'dark' ? '🌙' : '☀️'}
-            </button>
-            <button onClick={() => setIsFocusMode(!isFocusMode)} style={{ background: 'transparent', border: 'none', fontSize: 16, cursor: 'pointer', marginLeft: 5 }} title="Фокус-режим (F)">
-               🎯
-            </button>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 15, paddingLeft: 15, borderLeft: '1px solid var(--border)' }}>
-              <span style={{ fontSize: 12, color: 'var(--text-dim)', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.email}</span>
-              <button onClick={handleSignOut} style={{ background: 'transparent', border: '1px solid var(--border-light)', borderRadius: 6, color: 'var(--text-dim)', fontSize: 11, padding: '4px 8px', cursor: 'pointer' }}>Выйти</button>
-            </div>
-            {overdueCount > 0 && <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: 'var(--error-bg)', color: 'var(--error)', border: '1px solid rgba(255,112,112,0.2)' }}>{overdueCount} просрочено</span>}
+            {overdueCount > 0 && <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: 'var(--error-bg)', color: 'var(--error)', border: '1px solid rgba(255,112,112,0.2)', marginLeft: 8 }}>{overdueCount} просрочено</span>}
           </div>
-          <div style={{ display: 'flex', gap: 7, alignItems: 'center' }}>
-            {selectedDate !== today && <button onClick={() => setSelectedDate(today)} style={{ background: 'var(--accent-muted)', color: 'var(--accent)', border: '1px solid var(--accent-border)', borderRadius: 20, padding: '5px 13px', fontSize: 12, cursor: 'pointer', transition: 'background 0.15s' }}>Сегодня</button>}
-            <button className="cal-toggle" onClick={() => setShowCal((v) => !v)} style={{ background: showCal ? 'var(--accent-muted)' : 'transparent', border: '1px solid #242424', borderRadius: 8, padding: '5px 9px', color: showCal ? 'var(--accent)' : 'var(--text-dim)', cursor: 'pointer', fontSize: 15 }}>📅</button>
+
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
             <div style={{ position: 'relative' }}>
-              <input type="text" placeholder="Поиск..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} style={{ background: 'var(--bg-input)', border: '1px solid #222', borderRadius: 8, padding: '5px 10px', color: 'var(--text-highlight)', fontSize: 13, width: 150, outline: 'none' }} />
+              <input type="text" placeholder="Поиск..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} style={{ background: 'var(--bg-input)', border: '1px solid #222', borderRadius: 8, padding: '5px 10px', color: 'var(--text-highlight)', fontSize: 13, width: 120, outline: 'none' }} />
               {searchQuery && <button onClick={() => setSearchQuery('')} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', color: '#555', cursor: 'pointer' }}>×</button>}
             </div>
+
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} style={{ background: 'transparent', border: 'none', fontSize: 18, cursor: 'pointer' }} title="Переключить тему">
+                {theme === 'dark' ? '🌙' : '☀️'}
+              </button>
+              <button onClick={() => setIsFocusMode(!isFocusMode)} style={{ background: 'transparent', border: 'none', fontSize: 16, cursor: 'pointer' }} title="Фокус-режим (F)">
+                🎯
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingLeft: 12, borderLeft: '1px solid var(--border)' }}>
+              <span className="user-email-header" style={{ fontSize: 12, color: 'var(--text-dim)', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.email}</span>
+              <button onClick={() => setShowConfirmLogout(true)} style={{ background: 'transparent', border: '1px solid var(--border-light)', borderRadius: 6, color: 'var(--text-dim)', fontSize: 11, padding: '4px 8px', cursor: 'pointer' }}>Выйти</button>
+            </div>
+
+            {selectedDate !== today && <button onClick={() => setSelectedDate(today)} style={{ background: 'var(--accent-muted)', color: 'var(--accent)', border: '1px solid var(--accent-border)', borderRadius: 20, padding: '5px 13px', fontSize: 12, cursor: 'pointer' }}>Сегодня</button>}
+            <button className="cal-toggle" onClick={() => setShowCal((v) => !v)} style={{ background: showCal ? 'var(--accent-muted)' : 'transparent', border: '1px solid #242424', borderRadius: 8, padding: '5px 9px', color: showCal ? 'var(--accent)' : 'var(--text-dim)', cursor: 'pointer', fontSize: 15 }}>📅</button>
           </div>
         </header>
 
@@ -407,6 +416,7 @@ export default function App() {
           {showAI && <AISuggestPanel dateStr={selectedDate} existingTasks={dayTasks} onAdd={(s) => addTask(selectedDate, s)} onClose={() => setShowAI(false)} />}
           {showStats && <Statistics tasks={tasks} onClose={() => setShowStats(false)} />}
           {confirmDelete && <ConfirmModal title="Удалить задачу?" message="Это действие нельзя будет отменить." onConfirm={() => { deleteTask(selectedDate, confirmDelete); setConfirmDelete(null); }} onCancel={() => setConfirmDelete(null)} />}
+          {showConfirmLogout && <ConfirmModal title="Выйти из аккаунта?" message="Вы уверены, что хотите выйти?" confirmText="Выйти" isDanger={false} onConfirm={handleSignOut} onCancel={() => setShowConfirmLogout(false)} />}
         </Suspense>
       </div>
     </>

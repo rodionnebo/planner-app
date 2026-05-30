@@ -373,11 +373,18 @@ export function useTasks(user) {
 
   const moveTask = useCallback(
     (oldDate, newDate, id) => {
-      if (!id && typeof newDate === 'object') {
-        // Special case for duplication
-        return addTask(oldDate, newDate);
+      let targetDate = newDate;
+      if (newDate === 'tomorrow') {
+        targetDate = addDays(todayStr(), 1);
       }
+
+      if (id && typeof id === 'object') {
+        // Special case for duplication
+        return addTask(oldDate, id);
+      }
+
       setTasks(prev => {
+        if (!targetDate) return prev;
         const idStr = id.toString()
         const next = { ...prev }
 
@@ -401,8 +408,8 @@ export function useTasks(user) {
         if (task) {
           next[oldDate] = next[oldDate].filter((t) => t.id !== id)
           const updatedTask = { ...task }
-          next[newDate] = [...(next[newDate] || []), updatedTask]
-          updateLocalAndCloud(next, [{ ...updatedTask, date_str: newDate }])
+          next[targetDate] = [...(next[targetDate] || []), updatedTask]
+          updateLocalAndCloud(next, [{ ...updatedTask, date_str: targetDate }])
         }
         return next
       })
